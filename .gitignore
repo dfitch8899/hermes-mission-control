@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# production / build
+build/
+dist/
+
+# env (secrets) — allow documented template only
+.env
+.env.*
+!.env.example
+
+# debug / logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Vercel / deploy
+.vercel
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE (optional local junk)
+*.swp
+*.swo
+
+# certs / keys
+*.pem
+*.key
+!*.key.ts
+
+# testing
+coverage/

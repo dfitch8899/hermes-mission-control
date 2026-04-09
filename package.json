@@ -1,0 +1,37 @@
+{
+  "name": "hermes-mission-control",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "^18",
+    "react-dom": "^18",
+    "typescript": "^5",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "tailwindcss": "^3.4",
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "@aws-sdk/client-dynamodb": "^3",
+    "@aws-sdk/lib-dynamodb": "^3",
+    "@aws-sdk/client-cloudwatch": "^3",
+    "@aws-sdk/client-cloudwatch-logs": "^3",
+    "@aws-sdk/client-ecs": "^3",
+    "next-auth": "^4",
+    "@dnd-kit/core": "^6",
+    "@dnd-kit/sortable": "^8",
+    "@dnd-kit/utilities": "^3",
+    "react-markdown": "^9",
+    "remark-gfm": "^4",
+    "date-fns": "^3",
+    "lucide-react": "^0.400.0",
+    "uuid": "^9",
+    "@types/uuid": "^9",
+    "clsx": "^2"
+  }
+}

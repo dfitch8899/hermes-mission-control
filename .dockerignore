@@ -1,0 +1,18 @@
+# deps & build artifacts (reinstalled / rebuilt in image)
+node_modules
+.next
+
+# git / IDE
+.git
+.gitignore
+.cursor
+.vscode
+.idea
+
+# secrets & local config
+.env
+.env.*
+!.env.example
+
+# logs & misc
+npm-debug.log*

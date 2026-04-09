@@ -1,0 +1,232 @@
+'use client'
+
+import { useState } from 'react'
+import type { Memory, MemoryType } from '@/types/memory'
+import MemoryCard from './MemoryCard'
+import MemorySearch from './MemorySearch'
+import MemoryReadingView from './MemoryReadingView'
+
+interface MemoryGridProps {
+  initialMemories: Memory[]
+}
+
+type SortOption = 'relevance' | 'newest' | 'oldest' | 'title'
+
+export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
+  const [memories, setMemories] = useState<Memory[]>(initialMemories)
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilters, setTypeFilters] = useState<MemoryType[]>([])
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'hermes' | 'user'>('all')
+  const [sortBy, setSortBy] = useState<SortOption>('relevance')
+
+  const typeCounts = {
+    context: initialMemories.filter((m) => m.type === 'context').length,
+    skill: initialMemories.filter((m) => m.type === 'skill').length,
+    improvement: initialMemories.filter((m) => m.type === 'improvement').length,
+  }
+
+  // Collect all unique tags
+  const allTags = Array.from(new Set(initialMemories.flatMap((m) => m.tags))).slice(0, 20)
+
+  const toggleType = (type: MemoryType) => {
+    setTypeFilters((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    )
+  }
+
+  const filtered = memories
+    .filter((m) => {
+      if (typeFilters.length > 0 && !typeFilters.includes(m.type)) return false
+      if (sourceFilter !== 'all' && m.source !== sourceFilter) return false
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase()
+        return (
+          m.title.toLowerCase().includes(q) ||
+          m.content.toLowerCase().includes(q) ||
+          m.tags.some((t) => t.toLowerCase().includes(q))
+        )
+      }
+      return true
+    })
+    .sort((a, b) => {
+      if (sortBy === 'relevance') return b.relevanceScore - a.relevanceScore
+      if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      if (sortBy === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      return a.title.localeCompare(b.title)
+    })
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: '10px',
+    color: '#8B949E',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.1em',
+    fontFamily: 'var(--font-jetbrains-mono)',
+  }
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Left filter sidebar */}
+      <aside
+        className="w-60 shrink-0 flex flex-col overflow-y-auto p-4 space-y-5"
+        style={{ borderRight: '0.5px solid #30363D', backgroundColor: '#161B22' }}
+      >
+        <div>
+          <p style={labelStyle} className="mb-3">Type</p>
+          {(['context', 'skill', 'improvement'] as MemoryType[]).map((type) => (
+            <label key={type} className="flex items-center gap-2.5 py-1.5 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={typeFilters.includes(type)}
+                onChange={() => toggleType(type)}
+                className="sr-only"
+              />
+              <div
+                className="w-4 h-4 rounded flex items-center justify-center transition-all duration-100"
+                style={{
+                  backgroundColor: typeFilters.includes(type) ? '#FFB300' : '#0D1117',
+                  border: `0.5px solid ${typeFilters.includes(type) ? '#FFB300' : '#30363D'}`,
+                }}
+              >
+                {typeFilters.includes(type) && (
+                  <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                    <path d="M1 3L3 5L7 1" stroke="#0D1117" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-[12px] capitalize flex-1" style={{ color: '#E6EDF3' }}>
+                {type}
+              </span>
+              <span
+                className="text-[10px] font-mono px-1 rounded"
+                style={{ color: '#484F58', backgroundColor: '#0D1117', border: '0.5px solid #21262D' }}
+              >
+                {typeCounts[type]}
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ borderTop: '0.5px solid #21262D', paddingTop: '16px' }}>
+          <p style={labelStyle} className="mb-3">Source</p>
+          {(['all', 'hermes', 'user'] as const).map((s) => (
+            <label key={s} className="flex items-center gap-2.5 py-1.5 cursor-pointer">
+              <input
+                type="radio"
+                checked={sourceFilter === s}
+                onChange={() => setSourceFilter(s)}
+                className="sr-only"
+              />
+              <div
+                className="w-4 h-4 rounded-full flex items-center justify-center transition-all duration-100"
+                style={{
+                  border: `0.5px solid ${sourceFilter === s ? '#FFB300' : '#30363D'}`,
+                }}
+              >
+                {sourceFilter === s && (
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#FFB300' }} />
+                )}
+              </div>
+              <span className="text-[12px] capitalize" style={{ color: '#E6EDF3' }}>
+                {s === 'all' ? 'All sources' : s}
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ borderTop: '0.5px solid #21262D', paddingTop: '16px' }}>
+          <p style={labelStyle} className="mb-3">Sort</p>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            className="w-full rounded text-[12px] px-2 py-1.5 outline-none"
+            style={{
+              backgroundColor: '#0D1117',
+              border: '0.5px solid #30363D',
+              color: '#E6EDF3',
+              fontFamily: 'var(--font-inter)',
+            }}
+          >
+            <option value="relevance">Relevance</option>
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="title">Title A-Z</option>
+          </select>
+        </div>
+
+        <div style={{ borderTop: '0.5px solid #21262D', paddingTop: '16px' }}>
+          <p style={labelStyle} className="mb-3">Tags</p>
+          <div className="flex flex-wrap gap-1">
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setSearchQuery(tag)}
+                className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase tracking-widest transition-colors duration-100"
+                style={{
+                  backgroundColor: '#0D1117',
+                  color: '#484F58',
+                  border: '0.5px solid #21262D',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = '#FFB300'
+                  e.currentTarget.style.borderColor = 'rgba(255,179,0,0.3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = '#484F58'
+                  e.currentTarget.style.borderColor = '#21262D'
+                }}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Search bar */}
+        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '0.5px solid #30363D' }}>
+          <MemorySearch onSearch={setSearchQuery} />
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-[10px] font-mono" style={{ color: '#484F58' }}>
+              {filtered.length} memories
+            </span>
+          </div>
+        </div>
+
+        {/* Grid */}
+        <div
+          className="flex-1 overflow-y-auto p-6"
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', alignContent: 'start' }}
+        >
+          {filtered.map((memory, i) => (
+            <MemoryCard
+              key={memory.memoryId}
+              memory={memory}
+              index={i}
+              onClick={() => setSelectedMemory(memory)}
+            />
+          ))}
+
+          {filtered.length === 0 && (
+            <div
+              className="col-span-full text-center py-16 text-[12px] font-mono"
+              style={{ color: '#484F58' }}
+            >
+              No memories match your filters
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Reading view overlay */}
+      {selectedMemory && (
+        <MemoryReadingView
+          memory={selectedMemory}
+          onClose={() => setSelectedMemory(null)}
+        />
+      )}
+    </div>
+  )
+}
