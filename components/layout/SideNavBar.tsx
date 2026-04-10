@@ -19,30 +19,45 @@ export default function SideNavBar() {
     <aside
       className="fixed left-0 top-0 h-full flex flex-col z-50 sidebar-spring w-20 hover:w-64 group overflow-hidden"
       style={{
-        background: 'rgba(13, 19, 35, 0.6)',
-        backdropFilter: 'blur(24px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
+        background: 'rgba(10, 15, 28, 0.75)',
+        backdropFilter: 'blur(32px) saturate(200%)',
+        WebkitBackdropFilter: 'blur(32px) saturate(200%)',
+        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+        boxShadow: '4px 0 32px rgba(0,0,0,0.4), inset -1px 0 0 rgba(60, 215, 255, 0.04)',
       }}
     >
+      {/* Animated right-edge glow line */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-px pointer-events-none"
+        style={{
+          background: 'linear-gradient(180deg, transparent 0%, rgba(60,215,255,0.15) 30%, rgba(93,246,224,0.2) 50%, rgba(60,215,255,0.15) 70%, transparent 100%)',
+        }}
+      />
+
       {/* Logo */}
       <div className="flex items-center gap-4 px-5 py-6 mb-2">
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-headline font-black text-sm"
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-headline font-black text-sm relative"
           style={{
             background: 'linear-gradient(135deg, #3cd7ff, #5df6e0)',
             color: '#001f27',
-            boxShadow: '0 0 20px rgba(60, 215, 255, 0.3)',
+            boxShadow: '0 0 24px rgba(60, 215, 255, 0.35), 0 0 60px rgba(60, 215, 255, 0.1)',
           }}
         >
           H
+          {/* Pulsing ring around logo */}
+          <div
+            className="absolute inset-[-3px] rounded-xl animate-breathe-glow"
+            style={{
+              border: '1px solid rgba(60, 215, 255, 0.15)',
+            }}
+          />
         </div>
         <div className="overflow-hidden whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <div className="font-headline font-bold tracking-widest text-[13px] uppercase text-primary">
+          <div className="font-headline font-bold tracking-widest text-[13px] uppercase text-glow-cyan" style={{ color: '#3cd7ff' }}>
             HERMES
           </div>
-          <div className="text-[9px] uppercase tracking-widest text-outline">
+          <div className="text-[9px] uppercase tracking-[0.2em] text-outline">
             MISSION CONTROL
           </div>
         </div>
@@ -57,11 +72,12 @@ export default function SideNavBar() {
             <Link
               key={item.path}
               href={item.path}
-              className="flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-200 relative"
+              className="flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-300 relative overflow-hidden"
               style={{
-                color: isActive ? '#a8e8ff' : '#859398',
-                background: isActive ? 'rgba(168, 232, 255, 0.08)' : 'transparent',
-                borderRight: isActive ? '3px solid #3cd7ff' : '3px solid transparent',
+                color: isActive ? '#3cd7ff' : '#859398',
+                background: isActive ? 'rgba(60, 215, 255, 0.08)' : 'transparent',
+                borderRight: isActive ? '2px solid #3cd7ff' : '2px solid transparent',
+                boxShadow: isActive ? 'inset 0 0 20px rgba(60, 215, 255, 0.05)' : 'none',
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
@@ -76,9 +92,18 @@ export default function SideNavBar() {
                 }
               }}
             >
-              <Icon size={18} className="shrink-0" />
+              {/* Active item glow backdrop */}
+              {isActive && (
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background: 'radial-gradient(ellipse at 0% 50%, rgba(60,215,255,0.08), transparent 70%)',
+                  }}
+                />
+              )}
+              <Icon size={18} className="shrink-0 relative z-10" style={isActive ? { filter: 'drop-shadow(0 0 6px rgba(60,215,255,0.5))' } : {}} />
               <span
-                className="text-[10px] uppercase tracking-widest whitespace-nowrap overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity duration-200 font-label font-medium"
+                className="text-[10px] uppercase tracking-widest whitespace-nowrap overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity duration-200 font-label font-medium relative z-10"
               >
                 {item.label}
               </span>
@@ -90,17 +115,19 @@ export default function SideNavBar() {
       {/* Deploy button */}
       <div className="px-3 pb-4">
         <button
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-200 active:scale-95"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-300 active:scale-95 relative overflow-hidden"
           style={{
-            background: 'rgba(60, 215, 255, 0.1)',
-            border: '1px solid rgba(60, 215, 255, 0.2)',
+            background: 'rgba(60, 215, 255, 0.06)',
+            border: '1px solid rgba(60, 215, 255, 0.15)',
             color: '#3cd7ff',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(60, 215, 255, 0.18)'
+            e.currentTarget.style.background = 'rgba(60, 215, 255, 0.12)'
+            e.currentTarget.style.boxShadow = '0 0 20px rgba(60, 215, 255, 0.15)'
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(60, 215, 255, 0.1)'
+            e.currentTarget.style.background = 'rgba(60, 215, 255, 0.06)'
+            e.currentTarget.style.boxShadow = 'none'
           }}
         >
           <Zap size={16} className="shrink-0" />
@@ -111,14 +138,23 @@ export default function SideNavBar() {
       </div>
 
       {/* Bottom status */}
-      <div className="px-5 py-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <div className="px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="flex items-center gap-3">
-          <div
-            className="w-2 h-2 rounded-full shrink-0 animate-live-pulse"
-            style={{ backgroundColor: '#5df6e0' }}
-          />
+          <div className="relative">
+            <div
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{
+                backgroundColor: '#5df6e0',
+                boxShadow: '0 0 12px rgba(93, 246, 224, 0.6)',
+              }}
+            />
+            <div
+              className="absolute inset-[-2px] rounded-full animate-live-pulse"
+              style={{ border: '1px solid rgba(93, 246, 224, 0.3)' }}
+            />
+          </div>
           <span
-            className="text-[9px] uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 font-mono"
+            className="text-[9px] uppercase tracking-[0.2em] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 font-mono font-medium"
             style={{ color: '#5df6e0' }}
           >
             ONLINE

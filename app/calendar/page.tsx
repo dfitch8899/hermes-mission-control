@@ -51,13 +51,15 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'url(/bg-calendar.jpg)', backgroundSize: 'cover', backgroundPosition: 'center 20%', opacity: 0.12, zIndex: 0 }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 20%, #0d1323 72%)', zIndex: 1 }} />
       <TopAppBar breadcrumb={['Hermes', 'Calendar']} />
 
       {/* Subheader */}
       <div
         className="flex items-center justify-between px-6 py-3 shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(13,19,35,0.5)' }}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(13,19,35,0.5)', position: 'relative', zIndex: 2 }}
       >
         <div className="flex items-center gap-4">
           <span className="text-[11px] font-mono uppercase tracking-widest text-outline">
@@ -84,7 +86,7 @@ export default function CalendarPage() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4" style={{ position: 'relative', zIndex: 2 }}>
         <CalendarGrid
           events={events}
           selectedDate={selectedDate}

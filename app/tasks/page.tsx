@@ -22,13 +22,15 @@ export default function TasksPage() {
   }, [])
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'url(/bg-tasks.jpg)', backgroundSize: 'cover', backgroundPosition: 'center top', opacity: 0.1, zIndex: 0 }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 20%, transparent 20%, #0d1323 75%)', zIndex: 1 }} />
       <TopAppBar breadcrumb={['Hermes', 'Tasks']} />
 
       {/* Subheader */}
       <div
         className="flex items-center justify-between px-6 py-3 shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(13,19,35,0.5)' }}
+        style={{ position: 'relative', zIndex: 2, borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(13,19,35,0.5)' }}
       >
         <div className="flex items-center gap-4">
           <span className="text-[11px] font-mono uppercase tracking-widest text-outline">
@@ -55,7 +57,7 @@ export default function TasksPage() {
       </div>
 
       {/* Kanban */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden" style={{ position: 'relative', zIndex: 2 }}>
         {loading ? (
           <div className="flex items-center justify-center h-full text-[12px] font-mono text-outline">
             Loading tasks...

@@ -387,13 +387,15 @@ export default function TerminalPage() {
   }, [multiStep, addLine])
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'url(/bg-terminal.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.08, zIndex: 0 }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 30%, #0d1323 80%)', zIndex: 1 }} />
       <TopAppBar breadcrumb={['Hermes', 'Terminal']} />
 
       {/* Subheader with traffic lights */}
       <div
         className="flex items-center gap-3 px-5 py-2 shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(13,19,35,0.6)' }}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(13,19,35,0.6)', position: 'relative', zIndex: 2 }}
       >
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(255,180,171,0.6)' }} />
@@ -408,14 +410,18 @@ export default function TerminalPage() {
       </div>
 
       {/* Output */}
-      <TerminalOutput lines={lines} />
+      <div style={{ position: 'relative', zIndex: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <TerminalOutput lines={lines} />
+      </div>
 
       {/* Input */}
-      <TerminalInput
-        onCommand={executeCommand}
-        disabled={processing}
-        prompt={currentPrompt ?? '▸ HERMES ~$ '}
-      />
+      <div style={{ position: 'relative', zIndex: 2 }}>
+        <TerminalInput
+          onCommand={executeCommand}
+          disabled={processing}
+          prompt={currentPrompt ?? '▸ HERMES ~$ '}
+        />
+      </div>
     </div>
   )
 }

@@ -8,13 +8,18 @@ interface LogLine {
   message: string
 }
 
-function parseLineColor(msg: string): string {
-  if (msg.includes('[ERROR]')) return '#ffb4ab'
-  if (msg.includes('[WARN]')) return '#a8e8ff'
-  if (msg.includes('[OK]') || msg.includes('[SUCCESS]')) return '#5df6e0'
-  if (msg.includes('[INFO]')) return '#b8c4ff'
-  if (msg.includes('[HERMES]') || msg.includes('HERMES >')) return '#a8e8ff'
-  return '#bbc9cf'
+function parseLineColor(msg: string): { color: string; glow: string } {
+  if (msg.includes('[ERROR]') || msg.includes('ERROR'))
+    return { color: '#ffb4ab', glow: 'rgba(255,180,171,0.15)' }
+  if (msg.includes('[WARN]'))
+    return { color: '#ffd599', glow: 'rgba(255,213,153,0.1)' }
+  if (msg.includes('[OK]') || msg.includes('[SUCCESS]'))
+    return { color: '#5df6e0', glow: 'rgba(93,246,224,0.1)' }
+  if (msg.includes('[INFO]'))
+    return { color: '#b8c4ff', glow: 'rgba(184,196,255,0.08)' }
+  if (msg.includes('[HERMES]') || msg.includes('HERMES >'))
+    return { color: '#3cd7ff', glow: 'rgba(60,215,255,0.1)' }
+  return { color: '#78868b', glow: 'transparent' }
 }
 
 export default function ActivityFeed() {
@@ -49,50 +54,54 @@ export default function ActivityFeed() {
   }, [logs])
 
   return (
-    <div className="flex flex-col h-full rounded-2xl glass-card overflow-hidden">
+    <div className="flex flex-col h-full rounded-2xl glass-card-glow overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-        <div className="flex items-center gap-2">
+      <div
+        className="flex items-center justify-between px-4 py-3 shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+      >
+        <div className="flex items-center gap-2.5">
           <span
-            className="w-1.5 h-1.5 rounded-full animate-pulse-glow"
-            style={{ backgroundColor: fetching ? '#a8e8ff' : '#5df6e0' }}
+            className="w-2 h-2 rounded-full"
+            style={{
+              backgroundColor: fetching ? '#3cd7ff' : '#5df6e0',
+              boxShadow: `0 0 8px ${fetching ? 'rgba(60,215,255,0.5)' : 'rgba(93,246,224,0.5)'}`,
+            }}
           />
-          <span className="text-[10px] uppercase tracking-widest font-mono text-outline">
+          <span className="text-[10px] uppercase tracking-[0.15em] font-mono text-outline">
             Activity Feed
           </span>
         </div>
         {lastUpdated && (
-          <span className="text-[10px] font-mono text-outline">
+          <span className="text-[10px] font-mono text-outline opacity-60">
             {formatDistanceToNow(lastUpdated, { addSuffix: true })}
           </span>
         )}
       </div>
 
       {/* Log lines */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-0.5 font-mono">
+      <div className="flex-1 overflow-y-auto p-3 space-y-0.5 font-mono" style={{ background: 'rgba(8, 14, 29, 0.4)' }}>
         {logs.length === 0 ? (
-          <div className="text-[11px] py-4 text-center text-outline">
+          <div className="text-[11px] py-4 text-center text-outline opacity-50">
             Waiting for log data...
           </div>
         ) : (
           logs.map((line, i) => {
             const isNewest = i === logs.length - 1
-            const msgColor = parseLineColor(line.message)
+            const { color, glow } = parseLineColor(line.message)
             const ts = new Date(line.timestamp)
             const timeStr = ts.toLocaleTimeString('en-US', { hour12: false })
             return (
               <div
                 key={`${line.timestamp}-${i}`}
-                className={`flex gap-2 text-[11px] leading-relaxed animate-fade-in-up stagger-${Math.min(i % 8 + 1, 8)}`}
+                className="flex gap-2 text-[11px] leading-relaxed py-0.5 px-1 rounded"
+                style={{
+                  background: isNewest ? 'rgba(60, 215, 255, 0.04)' : glow,
+                  borderLeft: isNewest ? '2px solid #3cd7ff' : '2px solid transparent',
+                }}
               >
-                {isNewest && (
-                  <span
-                    className="w-1 rounded-full shrink-0 mt-1 self-start animate-pulse-glow"
-                    style={{ backgroundColor: '#3cd7ff', minHeight: '8px', minWidth: '4px' }}
-                  />
-                )}
-                <span className="text-outline">[{timeStr}]</span>
-                <span style={{ color: msgColor }}>{line.message}</span>
+                <span className="text-outline opacity-50 shrink-0">[{timeStr}]</span>
+                <span style={{ color }}>{line.message}</span>
               </div>
             )
           })

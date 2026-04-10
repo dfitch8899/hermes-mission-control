@@ -33,7 +33,7 @@ function Countdown({ target }: { target: string }) {
 
 function UptimeDisplay() {
   const [uptime, setUptime] = useState('')
-  const startTime = Date.now() - 86400000 * 3 - 3600000 * 7 // mock 3d 7h uptime
+  const startTime = Date.now() - 86400000 * 3 - 3600000 * 7
 
   useEffect(() => {
     function update() {
@@ -64,36 +64,79 @@ export default function OverviewPage() {
   const [events, setEvents] = useState<CalendarEvent[]>(MOCK_CALENDAR_EVENTS)
 
   useEffect(() => {
-    // Try to load live data
     fetch('/api/tasks').then(r => r.ok ? r.json() : null).then(d => { if (d?.tasks?.length) setTasks(d.tasks) }).catch(() => {})
     fetch('/api/memories').then(r => r.ok ? r.json() : null).then(d => { if (d?.memories?.length) setMemories(d.memories) }).catch(() => {})
     fetch('/api/calendar').then(r => r.ok ? r.json() : null).then(d => { if (d?.events?.length) setEvents(d.events) }).catch(() => {})
   }, [])
 
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress')
+  const completedTasks = tasks.filter(t => t.status === 'done')
   const recentTasks = [...tasks].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5)
   const recentMemories = [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3)
   const upcomingEvents = [...events].sort((a, b) => new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime()).slice(0, 3)
   const nextEvent = upcomingEvents[0]
 
+  const taskCompletionRate = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0
+  const memoryUtilization = Math.min(Math.round((memories.length / 10) * 100), 100)
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
+      {/* Background image — higher opacity for atmosphere */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: 'url(/bg-overview.jpg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center 30%',
+          opacity: 0.18,
+          zIndex: 0,
+        }}
+      />
+      {/* Gradient overlay to blend */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 30%, transparent 25%, #0d1323 75%)',
+          zIndex: 1,
+        }}
+      />
+
+      {/* Ambient orbs for depth */}
+      <div
+        className="ambient-orb"
+        style={{ width: 400, height: 400, top: '5%', left: '10%', background: 'rgba(60, 215, 255, 0.03)', zIndex: 1 }}
+      />
+      <div
+        className="ambient-orb"
+        style={{ width: 300, height: 300, bottom: '10%', right: '15%', background: 'rgba(93, 246, 224, 0.025)', animationDelay: '-8s', zIndex: 1 }}
+      />
+      <div
+        className="ambient-orb"
+        style={{ width: 250, height: 250, top: '40%', right: '5%', background: 'rgba(147, 51, 234, 0.02)', animationDelay: '-15s', zIndex: 1 }}
+      />
+
       <TopAppBar breadcrumb={['Hermes', 'Overview']} />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Page header */}
-        <div className="flex items-end justify-between">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 scan-line" style={{ position: 'relative', zIndex: 2 }}>
+        {/* Hero header */}
+        <div className="flex items-end justify-between animate-fade-in-up">
           <div>
-            <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface">
-              Agent <span style={{ color: '#3cd7ff' }}>Operations</span>
+            <h1 className="font-headline text-4xl font-bold tracking-tight text-on-surface">
+              Agent <span className="text-glow-cyan" style={{ color: '#3cd7ff' }}>Operations</span>
             </h1>
-            <p className="text-[11px] font-mono text-outline mt-1 uppercase tracking-widest">
+            <p className="text-[11px] font-mono text-outline mt-1.5 uppercase tracking-[0.2em]">
               Hermes Mission Control
             </p>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full liquid-glass">
-            <span className="w-2 h-2 rounded-full animate-pulse-glow" style={{ backgroundColor: '#5df6e0' }} />
-            <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: '#5df6e0' }}>
+          <div
+            className="flex items-center gap-2.5 px-4 py-2 rounded-full animate-breathe-glow"
+            style={{
+              background: 'rgba(93, 246, 224, 0.06)',
+              border: '1px solid rgba(93, 246, 224, 0.15)',
+            }}
+          >
+            <span className="w-2 h-2 rounded-full animate-live-pulse" style={{ backgroundColor: '#5df6e0' }} />
+            <span className="text-[10px] font-mono uppercase tracking-widest font-medium" style={{ color: '#5df6e0' }}>
               Agent Online
             </span>
           </div>
@@ -101,54 +144,64 @@ export default function OverviewPage() {
 
         {/* Metric cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            label="Active Tasks"
-            value={inProgressTasks.length}
-            sub={`${tasks.length} total tasks`}
-            accent="cyan"
-            live
-          />
-          <MetricCard
-            label="Memories Stored"
-            value={memories.length}
-            sub={`${memories.filter(m => m.source === 'hermes').length} from Hermes`}
-            accent="purple"
-          />
-          <MetricCard
-            label="Next Scheduled Run"
-            value={nextEvent ? <Countdown target={nextEvent.nextRun} /> : '—'}
-            sub={nextEvent?.title ?? 'No upcoming events'}
-            accent="teal"
-            live
-          />
-          <MetricCard
-            label="Agent Status"
-            value={
-              <span className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full inline-block animate-live-pulse" style={{ backgroundColor: '#5df6e0' }} />
-                ONLINE
-              </span>
-            }
-            sub={<><UptimeDisplay /> uptime</>}
-            accent="teal"
-            live
-          />
+          <div className="stagger-1">
+            <MetricCard
+              label="Active Tasks"
+              value={inProgressTasks.length}
+              sub={`${tasks.length} total tasks`}
+              accent="cyan"
+              live
+              progress={taskCompletionRate}
+            />
+          </div>
+          <div className="stagger-2">
+            <MetricCard
+              label="Memories Stored"
+              value={memories.length}
+              sub={`${memories.filter(m => m.source === 'hermes').length} from Hermes`}
+              accent="purple"
+              progress={memoryUtilization}
+            />
+          </div>
+          <div className="stagger-3">
+            <MetricCard
+              label="Next Scheduled Run"
+              value={nextEvent ? <Countdown target={nextEvent.nextRun} /> : '\u2014'}
+              sub={nextEvent?.title ?? 'No upcoming events'}
+              accent="teal"
+              live
+            />
+          </div>
+          <div className="stagger-4">
+            <MetricCard
+              label="Agent Status"
+              value={
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full inline-block animate-live-pulse" style={{ backgroundColor: '#5df6e0' }} />
+                  ONLINE
+                </span>
+              }
+              sub={<><UptimeDisplay /> uptime</>}
+              accent="teal"
+              live
+            />
+          </div>
         </div>
 
-        {/* Middle row */}
+        {/* Middle row — 3 column info panels */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Recent Tasks */}
-          <div className="rounded-2xl p-5 glass-card">
+          <div className="rounded-2xl p-5 glass-card animate-fade-in-up stagger-5">
             <div className="flex items-center justify-between mb-5">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-outline">Recent Tasks</span>
+              <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-outline">Recent Tasks</span>
               <a
                 href="/tasks"
-                className="text-[10px] font-mono uppercase tracking-widest transition-colors duration-100"
+                className="text-[10px] font-mono uppercase tracking-widest transition-colors duration-200"
                 style={{ color: '#859398' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#a8e8ff' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#3cd7ff' }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = '#859398' }}
               >
-                View all →
+                View all &rarr;
               </a>
             </div>
             <div className="space-y-3">
@@ -158,7 +211,7 @@ export default function OverviewPage() {
                   className="flex items-start gap-3 py-2 animate-slide-in-left"
                   style={{
                     animationDelay: `${i * 60}ms`,
-                    borderBottom: i < recentTasks.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    borderBottom: i < recentTasks.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                   }}
                 >
                   <div
@@ -169,6 +222,9 @@ export default function OverviewPage() {
                         : task.status === 'done' ? '#5df6e0'
                         : task.status === 'queued' ? '#b8c4ff'
                         : '#859398',
+                      boxShadow: task.status === 'in_progress'
+                        ? '0 0 8px rgba(60, 215, 255, 0.5)'
+                        : 'none',
                     }}
                   />
                   <div className="flex-1 min-w-0">
@@ -186,17 +242,17 @@ export default function OverviewPage() {
           </div>
 
           {/* Recent Memories */}
-          <div className="rounded-2xl p-5 glass-card">
+          <div className="rounded-2xl p-5 glass-card animate-fade-in-up stagger-6">
             <div className="flex items-center justify-between mb-5">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-outline">Recent Memories</span>
+              <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-outline">Recent Memories</span>
               <a
                 href="/memory"
-                className="text-[10px] font-mono uppercase tracking-widest transition-colors duration-100"
+                className="text-[10px] font-mono uppercase tracking-widest transition-colors duration-200"
                 style={{ color: '#859398' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#a8e8ff' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#3cd7ff' }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = '#859398' }}
               >
-                View all →
+                View all &rarr;
               </a>
             </div>
             <div className="space-y-3">
@@ -206,7 +262,7 @@ export default function OverviewPage() {
                   className="animate-slide-in-left"
                   style={{
                     animationDelay: `${i * 80}ms`,
-                    borderBottom: i < recentMemories.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    borderBottom: i < recentMemories.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                     paddingBottom: i < recentMemories.length - 1 ? '12px' : '0',
                   }}
                 >
@@ -225,17 +281,17 @@ export default function OverviewPage() {
           </div>
 
           {/* Upcoming Events */}
-          <div className="rounded-2xl p-5 glass-card">
+          <div className="rounded-2xl p-5 glass-card animate-fade-in-up stagger-7">
             <div className="flex items-center justify-between mb-5">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-outline">Upcoming Events</span>
+              <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-outline">Upcoming Events</span>
               <a
                 href="/calendar"
-                className="text-[10px] font-mono uppercase tracking-widest transition-colors duration-100"
+                className="text-[10px] font-mono uppercase tracking-widest transition-colors duration-200"
                 style={{ color: '#859398' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#a8e8ff' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#3cd7ff' }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = '#859398' }}
               >
-                View all →
+                View all &rarr;
               </a>
             </div>
             <div className="space-y-3">
@@ -245,13 +301,16 @@ export default function OverviewPage() {
                   className="flex items-start gap-3 animate-slide-in-left"
                   style={{
                     animationDelay: `${i * 70}ms`,
-                    borderBottom: i < upcomingEvents.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    borderBottom: i < upcomingEvents.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                     paddingBottom: i < upcomingEvents.length - 1 ? '12px' : '0',
                   }}
                 >
                   <div
                     className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
-                    style={{ backgroundColor: evt.type === 'cron' ? '#a8e8ff' : '#5df6e0' }}
+                    style={{
+                      backgroundColor: evt.type === 'cron' ? '#3cd7ff' : '#5df6e0',
+                      boxShadow: `0 0 8px ${evt.type === 'cron' ? 'rgba(60,215,255,0.4)' : 'rgba(93,246,224,0.4)'}`,
+                    }}
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-medium truncate text-on-surface">{evt.title}</p>
@@ -271,7 +330,7 @@ export default function OverviewPage() {
         </div>
 
         {/* Activity Feed */}
-        <div className="h-64">
+        <div className="h-64 animate-fade-in-up stagger-8">
           <ActivityFeed />
         </div>
       </div>
