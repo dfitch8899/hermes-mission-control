@@ -15,14 +15,14 @@ interface TerminalOutputProps {
 
 function getLineColor(type: TerminalLine['type']): string {
   switch (type) {
-    case 'prompt': return '#FFB300'
-    case 'hermes': return '#FFB300'
-    case 'error': return '#F85149'
-    case 'warn': return '#FFB300'
-    case 'ok': return '#3FB950'
-    case 'info': return '#388BFD'
-    case 'system': return '#8B949E'
-    default: return '#E6EDF3'
+    case 'prompt': return '#a8e8ff'
+    case 'hermes': return '#a8e8ff'
+    case 'error': return '#ffb4ab'
+    case 'warn': return '#a8e8ff'
+    case 'ok': return '#5df6e0'
+    case 'info': return '#b8c4ff'
+    case 'system': return '#859398'
+    default: return '#dde2f9'
   }
 }
 
@@ -50,7 +50,7 @@ export default function TerminalOutput({ lines }: TerminalOutputProps) {
     <div
       className="flex-1 overflow-y-auto p-5 space-y-0.5"
       style={{
-        backgroundColor: '#0A0E14',
+        backgroundColor: '#080e1d',
         fontFamily: 'var(--font-jetbrains-mono)',
         fontSize: '13px',
         lineHeight: '1.8',
@@ -66,7 +66,7 @@ export default function TerminalOutput({ lines }: TerminalOutputProps) {
             key={line.id}
             className="terminal-line-enter flex gap-3 hover:bg-white/[0.02] transition-colors duration-100 px-1 -mx-1 rounded"
           >
-            <span style={{ color: '#484F58', flexShrink: 0 }}>[{ts}]</span>
+            <span style={{ color: '#3c494e', flexShrink: 0 }}>[{ts}]</span>
             {prefix && (
               <span style={{ color, flexShrink: 0 }}>{prefix}</span>
             )}

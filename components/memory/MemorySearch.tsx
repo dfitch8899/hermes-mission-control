@@ -18,18 +18,18 @@ export default function MemorySearch({ onSearch }: MemorySearchProps) {
 
   return (
     <div
-      className="flex items-center gap-3 px-4 h-11 rounded transition-all duration-150"
+      className="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200"
       style={{
-        backgroundColor: '#1C2128',
-        border: focused ? '0.5px solid #FFB300' : '0.5px solid #30363D',
+        background: 'rgba(255,255,255,0.03)',
+        border: focused ? '1px solid rgba(60,215,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
       }}
     >
-      <Search size={15} style={{ color: '#484F58', flexShrink: 0 }} />
+      <Search size={15} className="text-outline shrink-0" />
       <input
         type="text"
         placeholder="Search memories by title, content, or tags..."
-        className="bg-transparent border-none outline-none flex-1 text-[13px] placeholder:opacity-40"
-        style={{ color: '#E6EDF3', fontFamily: 'var(--font-inter)' }}
+        className="bg-transparent border-none outline-none flex-1 text-[13px] placeholder:opacity-30 text-on-surface"
+        style={{ fontFamily: 'var(--font-inter)' }}
         value={value}
         onChange={handleChange}
         onFocus={() => setFocused(true)}
@@ -38,8 +38,8 @@ export default function MemorySearch({ onSearch }: MemorySearchProps) {
       {value && (
         <button
           onClick={() => { setValue(''); onSearch('') }}
-          className="text-[10px] font-mono px-1.5 py-0.5 rounded"
-          style={{ color: '#8B949E', backgroundColor: '#0D1117', border: '0.5px solid #30363D' }}
+          className="text-[10px] font-mono px-1.5 py-0.5 rounded text-outline"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
         >
           clear
         </button>

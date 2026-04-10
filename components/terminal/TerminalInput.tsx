@@ -44,15 +44,15 @@ export default function TerminalInput({ onCommand, disabled, prompt = '▸ HERME
     <div
       className="h-14 shrink-0 flex items-center px-5 gap-2"
       style={{
-        backgroundColor: '#0A0E14',
-        borderTop: '0.5px solid #30363D',
+        backgroundColor: '#080e1d',
+        borderTop: '1px solid rgba(255,255,255,0.07)',
         fontFamily: 'var(--font-jetbrains-mono)',
         fontSize: '13px',
       }}
     >
       <span
         className="shrink-0 font-bold"
-        style={{ color: '#FFB300' }}
+        style={{ color: '#3cd7ff' }}
       >
         {prompt}
       </span>
@@ -63,12 +63,12 @@ export default function TerminalInput({ onCommand, disabled, prompt = '▸ HERME
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        className="flex-1 bg-transparent border-none outline-none caret-amber"
+        className="flex-1 bg-transparent border-none outline-none"
         style={{
-          color: '#E6EDF3',
+          color: '#dde2f9',
           fontFamily: 'var(--font-jetbrains-mono)',
           fontSize: '13px',
-          caretColor: '#FFB300',
+          caretColor: '#3cd7ff',
         }}
         placeholder={disabled ? 'Processing...' : ''}
         autoComplete="off"
@@ -76,7 +76,7 @@ export default function TerminalInput({ onCommand, disabled, prompt = '▸ HERME
         spellCheck={false}
       />
       {disabled && (
-        <div className="w-2 h-4 rounded-sm animate-pulse" style={{ backgroundColor: '#FFB300' }} />
+        <div className="w-2 h-4 rounded-sm animate-pulse" style={{ backgroundColor: '#3cd7ff' }} />
       )}
     </div>
   )

@@ -23,7 +23,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: 'Hermes Mission Control',
-  description: 'Hermes Agent Management Platform v2.1',
+  description: 'Hermes Agent Management Platform',
 }
 
 export default function RootLayout({
@@ -32,8 +32,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="bg-bg-base text-text-primary font-body overflow-hidden h-screen">
+    <html lang="en" className={`dark ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
+      <body className="bg-background text-on-background font-body overflow-hidden h-screen">
         <div className="flex h-screen overflow-hidden">
           <SideNavBar />
           <main className="flex-1 flex flex-col h-screen overflow-hidden ml-20">

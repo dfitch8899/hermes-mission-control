@@ -9,19 +9,18 @@ interface LogLine {
 }
 
 function parseLineColor(msg: string): string {
-  if (msg.includes('[ERROR]')) return '#F85149'
-  if (msg.includes('[WARN]')) return '#FFB300'
-  if (msg.includes('[OK]') || msg.includes('[SUCCESS]')) return '#3FB950'
-  if (msg.includes('[INFO]')) return '#388BFD'
-  if (msg.includes('[HERMES]') || msg.includes('HERMES >')) return '#FFB300'
-  return '#8B949E'
+  if (msg.includes('[ERROR]')) return '#ffb4ab'
+  if (msg.includes('[WARN]')) return '#a8e8ff'
+  if (msg.includes('[OK]') || msg.includes('[SUCCESS]')) return '#5df6e0'
+  if (msg.includes('[INFO]')) return '#b8c4ff'
+  if (msg.includes('[HERMES]') || msg.includes('HERMES >')) return '#a8e8ff'
+  return '#bbc9cf'
 }
 
 export default function ActivityFeed() {
   const [logs, setLogs] = useState<LogLine[]>([])
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [fetching, setFetching] = useState(false)
-  const [tick, setTick] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   async function fetchLogs() {
@@ -30,13 +29,10 @@ export default function ActivityFeed() {
       const res = await fetch('/api/ecs/logs?lines=50')
       if (res.ok) {
         const data = await res.json()
-        if (data.logs && Array.isArray(data.logs)) {
-          setLogs(data.logs)
-        }
+        if (data.logs && Array.isArray(data.logs)) setLogs(data.logs)
       }
-    } catch {
-      // silently fail
-    } finally {
+    } catch { /* silently fail */ }
+    finally {
       setFetching(false)
       setLastUpdated(new Date())
     }
@@ -48,52 +44,34 @@ export default function ActivityFeed() {
     return () => clearInterval(interval)
   }, [])
 
-  // Update "X seconds ago" ticker
-  useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 5000)
-    return () => clearInterval(t)
-  }, [])
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
 
   return (
-    <div
-      className="flex flex-col h-full rounded"
-      style={{
-        backgroundColor: '#161B22',
-        border: '0.5px solid #30363D',
-      }}
-    >
+    <div className="flex flex-col h-full rounded-2xl glass-card overflow-hidden">
       {/* Header */}
-      <div
-        className="flex items-center justify-between px-4 py-3 shrink-0"
-        style={{ borderBottom: '0.5px solid #30363D' }}
-      >
+      <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
         <div className="flex items-center gap-2">
           <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{
-              backgroundColor: fetching ? '#FFB300' : '#3FB950',
-              animation: 'pulseAmber 2s ease-in-out infinite',
-            }}
+            className="w-1.5 h-1.5 rounded-full animate-pulse-glow"
+            style={{ backgroundColor: fetching ? '#a8e8ff' : '#5df6e0' }}
           />
-          <span className="text-[10px] uppercase tracking-widest font-mono" style={{ color: '#8B949E' }}>
+          <span className="text-[10px] uppercase tracking-widest font-mono text-outline">
             Activity Feed
           </span>
         </div>
         {lastUpdated && (
-          <span className="text-[10px] font-mono" style={{ color: '#484F58' }}>
+          <span className="text-[10px] font-mono text-outline">
             {formatDistanceToNow(lastUpdated, { addSuffix: true })}
           </span>
         )}
       </div>
 
       {/* Log lines */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-1 font-mono">
+      <div className="flex-1 overflow-y-auto p-3 space-y-0.5 font-mono">
         {logs.length === 0 ? (
-          <div className="text-[11px] py-4 text-center" style={{ color: '#484F58' }}>
+          <div className="text-[11px] py-4 text-center text-outline">
             Waiting for log data...
           </div>
         ) : (
@@ -102,7 +80,6 @@ export default function ActivityFeed() {
             const msgColor = parseLineColor(line.message)
             const ts = new Date(line.timestamp)
             const timeStr = ts.toLocaleTimeString('en-US', { hour12: false })
-
             return (
               <div
                 key={`${line.timestamp}-${i}`}
@@ -110,11 +87,11 @@ export default function ActivityFeed() {
               >
                 {isNewest && (
                   <span
-                    className="w-1 rounded-full shrink-0 mt-1 self-start animate-pulse-amber"
-                    style={{ backgroundColor: '#FFB300', minHeight: '8px', minWidth: '4px' }}
+                    className="w-1 rounded-full shrink-0 mt-1 self-start animate-pulse-glow"
+                    style={{ backgroundColor: '#3cd7ff', minHeight: '8px', minWidth: '4px' }}
                   />
                 )}
-                <span style={{ color: '#484F58' }}>[{timeStr}]</span>
+                <span className="text-outline">[{timeStr}]</span>
                 <span style={{ color: msgColor }}>{line.message}</span>
               </div>
             )

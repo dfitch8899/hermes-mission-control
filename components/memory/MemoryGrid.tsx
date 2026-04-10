@@ -58,7 +58,7 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
 
   const labelStyle: React.CSSProperties = {
     fontSize: '10px',
-    color: '#8B949E',
+    color: '#859398',
     textTransform: 'uppercase' as const,
     letterSpacing: '0.1em',
     fontFamily: 'var(--font-jetbrains-mono)',
@@ -69,7 +69,7 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
       {/* Left filter sidebar */}
       <aside
         className="w-60 shrink-0 flex flex-col overflow-y-auto p-4 space-y-5"
-        style={{ borderRight: '0.5px solid #30363D', backgroundColor: '#161B22' }}
+        style={{ borderRight: '1px solid rgba(255,255,255,0.07)', background: 'rgba(13,19,35,0.5)' }}
       >
         <div>
           <p style={labelStyle} className="mb-3">Type</p>
@@ -84,22 +84,26 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
               <div
                 className="w-4 h-4 rounded flex items-center justify-center transition-all duration-100"
                 style={{
-                  backgroundColor: typeFilters.includes(type) ? '#FFB300' : '#0D1117',
-                  border: `0.5px solid ${typeFilters.includes(type) ? '#FFB300' : '#30363D'}`,
+                  backgroundColor: typeFilters.includes(type) ? '#3cd7ff' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${typeFilters.includes(type) ? '#3cd7ff' : 'rgba(255,255,255,0.08)'}`,
                 }}
               >
                 {typeFilters.includes(type) && (
                   <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                    <path d="M1 3L3 5L7 1" stroke="#0D1117" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M1 3L3 5L7 1" stroke="#0d1323" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
               </div>
-              <span className="text-[12px] capitalize flex-1" style={{ color: '#E6EDF3' }}>
+              <span className="text-[12px] capitalize flex-1 text-on-surface">
                 {type}
               </span>
               <span
                 className="text-[10px] font-mono px-1 rounded"
-                style={{ color: '#484F58', backgroundColor: '#0D1117', border: '0.5px solid #21262D' }}
+                style={{
+                  color: '#859398',
+                  backgroundColor: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
               >
                 {typeCounts[type]}
               </span>
@@ -107,7 +111,7 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
           ))}
         </div>
 
-        <div style={{ borderTop: '0.5px solid #21262D', paddingTop: '16px' }}>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
           <p style={labelStyle} className="mb-3">Source</p>
           {(['all', 'hermes', 'user'] as const).map((s) => (
             <label key={s} className="flex items-center gap-2.5 py-1.5 cursor-pointer">
@@ -120,30 +124,33 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
               <div
                 className="w-4 h-4 rounded-full flex items-center justify-center transition-all duration-100"
                 style={{
-                  border: `0.5px solid ${sourceFilter === s ? '#FFB300' : '#30363D'}`,
+                  border: `1px solid ${sourceFilter === s ? '#3cd7ff' : 'rgba(255,255,255,0.08)'}`,
                 }}
               >
                 {sourceFilter === s && (
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#FFB300' }} />
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#3cd7ff' }} />
                 )}
               </div>
-              <span className="text-[12px] capitalize" style={{ color: '#E6EDF3' }}>
+              <span className="text-[12px] capitalize text-on-surface">
                 {s === 'all' ? 'All sources' : s}
               </span>
             </label>
           ))}
         </div>
 
-        <div style={{ borderTop: '0.5px solid #21262D', paddingTop: '16px' }}>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
           <p style={labelStyle} className="mb-3">Sort</p>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="w-full rounded text-[12px] px-2 py-1.5 outline-none"
+            className="w-full outline-none"
             style={{
-              backgroundColor: '#0D1117',
-              border: '0.5px solid #30363D',
-              color: '#E6EDF3',
+              backgroundColor: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              color: '#dde2f9',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              fontSize: '12px',
               fontFamily: 'var(--font-inter)',
             }}
           >
@@ -154,7 +161,7 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
           </select>
         </div>
 
-        <div style={{ borderTop: '0.5px solid #21262D', paddingTop: '16px' }}>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
           <p style={labelStyle} className="mb-3">Tags</p>
           <div className="flex flex-wrap gap-1">
             {allTags.map((tag) => (
@@ -163,17 +170,17 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
                 onClick={() => setSearchQuery(tag)}
                 className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase tracking-widest transition-colors duration-100"
                 style={{
-                  backgroundColor: '#0D1117',
-                  color: '#484F58',
-                  border: '0.5px solid #21262D',
+                  backgroundColor: 'rgba(255,255,255,0.04)',
+                  color: '#859398',
+                  border: '1px solid rgba(255,255,255,0.08)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#FFB300'
-                  e.currentTarget.style.borderColor = 'rgba(255,179,0,0.3)'
+                  e.currentTarget.style.color = '#a8e8ff'
+                  e.currentTarget.style.borderColor = 'rgba(168,232,255,0.25)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#484F58'
-                  e.currentTarget.style.borderColor = '#21262D'
+                  e.currentTarget.style.color = '#859398'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
                 }}
               >
                 {tag}
@@ -186,10 +193,10 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Search bar */}
-        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '0.5px solid #30363D' }}>
+        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
           <MemorySearch onSearch={setSearchQuery} />
           <div className="flex items-center justify-between mt-2">
-            <span className="text-[10px] font-mono" style={{ color: '#484F58' }}>
+            <span className="text-[10px] font-mono text-outline">
               {filtered.length} memories
             </span>
           </div>
@@ -211,8 +218,7 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
 
           {filtered.length === 0 && (
             <div
-              className="col-span-full text-center py-16 text-[12px] font-mono"
-              style={{ color: '#484F58' }}
+              className="col-span-full text-center py-16 text-[12px] font-mono text-outline"
             >
               No memories match your filters
             </div>

@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 
-type BadgeVariant = 'amber' | 'teal' | 'blue' | 'red' | 'green' | 'muted'
+type BadgeVariant = 'amber' | 'teal' | 'blue' | 'red' | 'green' | 'muted' | 'cyan' | 'purple'
 
 interface BadgeProps {
   children: React.ReactNode
@@ -9,18 +9,20 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, React.CSSProperties> = {
-  amber: { backgroundColor: 'rgba(255,179,0,0.12)', color: '#FFB300', border: '0.5px solid rgba(255,179,0,0.3)' },
-  teal: { backgroundColor: 'rgba(20,184,166,0.12)', color: '#14B8A6', border: '0.5px solid rgba(20,184,166,0.3)' },
-  blue: { backgroundColor: 'rgba(56,139,253,0.12)', color: '#388BFD', border: '0.5px solid rgba(56,139,253,0.3)' },
-  red: { backgroundColor: 'rgba(248,81,73,0.12)', color: '#F85149', border: '0.5px solid rgba(248,81,73,0.3)' },
-  green: { backgroundColor: 'rgba(63,185,80,0.12)', color: '#3FB950', border: '0.5px solid rgba(63,185,80,0.3)' },
-  muted: { backgroundColor: 'rgba(72,79,88,0.2)', color: '#8B949E', border: '0.5px solid #30363D' },
+  cyan:   { backgroundColor: 'rgba(168,232,255,0.1)', color: '#a8e8ff', border: '1px solid rgba(168,232,255,0.25)' },
+  amber:  { backgroundColor: 'rgba(168,232,255,0.1)', color: '#a8e8ff', border: '1px solid rgba(168,232,255,0.25)' },
+  teal:   { backgroundColor: 'rgba(93,246,224,0.1)', color: '#5df6e0', border: '1px solid rgba(93,246,224,0.25)' },
+  green:  { backgroundColor: 'rgba(93,246,224,0.1)', color: '#5df6e0', border: '1px solid rgba(93,246,224,0.25)' },
+  blue:   { backgroundColor: 'rgba(168,232,255,0.1)', color: '#a8e8ff', border: '1px solid rgba(168,232,255,0.25)' },
+  purple: { backgroundColor: 'rgba(184,196,255,0.1)', color: '#b8c4ff', border: '1px solid rgba(184,196,255,0.25)' },
+  red:    { backgroundColor: 'rgba(255,180,171,0.1)', color: '#ffb4ab', border: '1px solid rgba(255,180,171,0.25)' },
+  muted:  { backgroundColor: 'rgba(133,147,152,0.1)', color: '#859398', border: '1px solid rgba(133,147,152,0.2)' },
 }
 
 export default function Badge({ children, variant = 'muted', className }: BadgeProps) {
   return (
     <span
-      className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] uppercase tracking-widest font-mono', className)}
+      className={clsx('inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] uppercase tracking-widest font-mono', className)}
       style={variantStyles[variant]}
     >
       {children}

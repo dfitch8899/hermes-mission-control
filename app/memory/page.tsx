@@ -23,9 +23,8 @@ export default function MemoryPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <TopAppBar breadcrumb={['Hermes', 'Memory']} />
-
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-[12px] font-mono" style={{ color: '#484F58' }}>
+        <div className="flex-1 flex items-center justify-center text-[12px] font-mono text-outline">
           Loading memories...
         </div>
       ) : (

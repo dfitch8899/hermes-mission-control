@@ -390,22 +390,20 @@ export default function TerminalPage() {
     <div className="flex-1 flex flex-col overflow-hidden">
       <TopAppBar breadcrumb={['Hermes', 'Terminal']} />
 
-      {/* Subheader */}
+      {/* Subheader with traffic lights */}
       <div
         className="flex items-center gap-3 px-5 py-2 shrink-0"
-        style={{ borderBottom: '0.5px solid #30363D', backgroundColor: '#161B22' }}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(13,19,35,0.6)' }}
       >
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#F85149' }} />
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#FFB300' }} />
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#3FB950' }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(255,180,171,0.6)' }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(168,232,255,0.4)' }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(93,246,224,0.6)' }} />
         </div>
-        <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: '#484F58' }}>
-          hermes-agent — terminal
-        </span>
+        <span className="text-[10px] font-mono uppercase tracking-widest text-outline">hermes-agent — terminal</span>
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full animate-pulse-amber" style={{ backgroundColor: '#3FB950' }} />
-          <span className="text-[10px] font-mono" style={{ color: '#3FB950' }}>CONNECTED</span>
+          <span className="w-1.5 h-1.5 rounded-full animate-pulse-glow" style={{ backgroundColor: '#5df6e0' }} />
+          <span className="text-[10px] font-mono" style={{ color: '#5df6e0' }}>CONNECTED</span>
         </div>
       </div>
 

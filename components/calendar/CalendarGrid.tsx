@@ -30,33 +30,28 @@ export default function CalendarGrid({ events, selectedDate, onSelectDate }: Cal
   }
 
   return (
-    <div
-      className="rounded overflow-hidden"
-      style={{ backgroundColor: '#161B22', border: '0.5px solid #30363D' }}
-    >
+    <div className="rounded-2xl glass-card overflow-hidden">
       {/* Month nav */}
       <div
         className="flex items-center justify-between px-5 py-3"
-        style={{ borderBottom: '0.5px solid #30363D' }}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
       >
         <button
           onClick={() => setViewDate((d) => new Date(d.getFullYear(), d.getMonth() - 1))}
-          className="w-7 h-7 flex items-center justify-center rounded transition-colors duration-100"
-          style={{ color: '#8B949E' }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 text-outline"
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
         >
           <ChevronLeft size={15} />
         </button>
-        <span className="text-[13px] font-headline font-bold uppercase tracking-widest" style={{ color: '#E6EDF3' }}>
+        <span className="text-[13px] font-headline font-bold uppercase tracking-widest text-on-surface">
           {format(viewDate, 'MMMM yyyy')}
         </span>
         <button
           onClick={() => setViewDate((d) => new Date(d.getFullYear(), d.getMonth() + 1))}
-          className="w-7 h-7 flex items-center justify-center rounded transition-colors duration-100"
-          style={{ color: '#8B949E' }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 text-outline"
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
         >
           <ChevronRight size={15} />
         </button>
@@ -67,8 +62,8 @@ export default function CalendarGrid({ events, selectedDate, onSelectDate }: Cal
         {DAYS.map((d) => (
           <div
             key={d}
-            className="py-2 text-center text-[9px] font-mono uppercase tracking-widest"
-            style={{ color: '#484F58', borderBottom: '0.5px solid #30363D' }}
+            className="py-2 text-center text-[9px] font-mono uppercase tracking-widest text-outline"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
           >
             {d}
           </div>
@@ -89,32 +84,32 @@ export default function CalendarGrid({ events, selectedDate, onSelectDate }: Cal
               onClick={() => inMonth && onSelectDate(day)}
               className="min-h-[64px] p-2 transition-colors duration-100"
               style={{
-                border: '0.5px solid #21262D',
-                opacity: inMonth ? 1 : 0.3,
+                borderBottom: '1px solid rgba(255,255,255,0.04)',
+                opacity: inMonth ? 1 : 0.25,
                 cursor: inMonth ? 'pointer' : 'default',
-                backgroundColor: selected
-                  ? 'rgba(255,179,0,0.07)'
+                background: selected
+                  ? 'rgba(60,215,255,0.1)'
                   : today
-                  ? 'rgba(56,139,253,0.04)'
+                  ? 'rgba(93,246,224,0.05)'
                   : 'transparent',
               }}
               onMouseEnter={(e) => {
                 if (inMonth && !selected) {
-                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)'
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
                 }
               }}
               onMouseLeave={(e) => {
                 if (inMonth && !selected) {
-                  e.currentTarget.style.backgroundColor = today ? 'rgba(56,139,253,0.04)' : 'transparent'
+                  e.currentTarget.style.background = today ? 'rgba(93,246,224,0.05)' : 'transparent'
                 }
               }}
             >
               <span
-                className={`text-[11px] font-mono inline-flex w-5 h-5 items-center justify-center rounded-full`}
+                className="text-[13px] font-headline font-medium inline-flex w-5 h-5 items-center justify-center rounded-full"
                 style={{
-                  color: today ? '#388BFD' : selected ? '#FFB300' : inMonth ? '#8B949E' : '#484F58',
-                  backgroundColor: today ? 'rgba(56,139,253,0.15)' : 'transparent',
-                  fontWeight: today || selected ? 600 : 400,
+                  color: selected ? '#3cd7ff' : today ? '#5df6e0' : '#dde2f9',
+                  backgroundColor: today && !selected ? 'rgba(93,246,224,0.12)' : 'transparent',
+                  fontWeight: today || selected ? 700 : 400,
                 }}
               >
                 {format(day, 'd')}
@@ -126,12 +121,15 @@ export default function CalendarGrid({ events, selectedDate, onSelectDate }: Cal
                     <div
                       key={evt.eventId}
                       className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: evt.type === 'cron' ? '#FFB300' : '#14B8A6' }}
+                      style={{
+                        backgroundColor: evt.type === 'cron' ? '#a8e8ff' : '#5df6e0',
+                        boxShadow: `0 0 4px ${evt.type === 'cron' ? '#a8e8ff' : '#5df6e0'}80`,
+                      }}
                       title={evt.title}
                     />
                   ))}
                   {dayEvents.length > 3 && (
-                    <span className="text-[8px] font-mono" style={{ color: '#484F58' }}>
+                    <span className="text-[8px] font-mono text-outline">
                       +{dayEvents.length - 3}
                     </span>
                   )}

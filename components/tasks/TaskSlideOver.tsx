@@ -54,9 +54,9 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
   }
 
   const inputStyle: React.CSSProperties = {
-    backgroundColor: '#0D1117',
-    border: '0.5px solid #30363D',
-    color: '#E6EDF3',
+    backgroundColor: 'rgba(13,19,35,0.8)',
+    border: '0.5px solid rgba(255,255,255,0.1)',
+    color: '#dde2f9',
     borderRadius: '6px',
     padding: '8px 12px',
     fontSize: '13px',
@@ -67,7 +67,7 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
 
   const labelStyle: React.CSSProperties = {
     fontSize: '10px',
-    color: '#8B949E',
+    color: '#859398',
     textTransform: 'uppercase',
     letterSpacing: '0.1em',
     fontFamily: 'var(--font-jetbrains-mono)',
@@ -82,7 +82,7 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant={priorityBadge[task.priority]}>{task.priority}</Badge>
           <Badge variant="muted">{task.status}</Badge>
-          <Badge variant={task.assignee === 'hermes' ? 'amber' : task.assignee === 'human' ? 'teal' : 'muted'}>
+          <Badge variant={task.assignee === 'hermes' ? 'cyan' : task.assignee === 'human' ? 'teal' : 'muted'}>
             {task.assignee}
           </Badge>
           {task.source === 'hermes_auto' && <Badge variant="blue">AUTO</Badge>}
@@ -95,8 +95,8 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
             style={inputStyle}
             value={form.title || ''}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            onFocus={(e) => { e.target.style.borderColor = '#FFB300' }}
-            onBlur={(e) => { e.target.style.borderColor = '#30363D' }}
+            onFocus={(e) => { e.target.style.borderColor = '#3cd7ff' }}
+            onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
           />
         </div>
 
@@ -107,8 +107,8 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
             style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', lineHeight: '1.5' }}
             value={form.description || ''}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            onFocus={(e) => { e.target.style.borderColor = '#FFB300' }}
-            onBlur={(e) => { e.target.style.borderColor = '#30363D' }}
+            onFocus={(e) => { e.target.style.borderColor = '#3cd7ff' }}
+            onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
           />
         </div>
 
@@ -161,8 +161,8 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
             style={inputStyle}
             value={(form.tags || task.tags || []).join(', ')}
             onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) }))}
-            onFocus={(e) => { e.target.style.borderColor = '#FFB300' }}
-            onBlur={(e) => { e.target.style.borderColor = '#30363D' }}
+            onFocus={(e) => { e.target.style.borderColor = '#3cd7ff' }}
+            onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
           />
         </div>
 
@@ -173,9 +173,9 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
             <div
               className="rounded p-3 text-[12px] leading-relaxed"
               style={{
-                backgroundColor: 'rgba(255,179,0,0.05)',
-                border: '0.5px solid rgba(255,179,0,0.2)',
-                color: '#E6EDF3',
+                backgroundColor: 'rgba(60,215,255,0.05)',
+                border: '0.5px solid rgba(60,215,255,0.2)',
+                color: '#dde2f9',
                 fontFamily: 'var(--font-jetbrains-mono)',
               }}
             >
@@ -185,16 +185,16 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
         )}
 
         {/* Metadata */}
-        <div className="space-y-1 pt-2" style={{ borderTop: '0.5px solid #21262D' }}>
-          <div className="flex justify-between text-[10px] font-mono" style={{ color: '#484F58' }}>
+        <div className="space-y-1 pt-2" style={{ borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
+          <div className="flex justify-between text-[10px] font-mono" style={{ color: '#859398' }}>
             <span>Created</span>
             <span>{formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}</span>
           </div>
-          <div className="flex justify-between text-[10px] font-mono" style={{ color: '#484F58' }}>
+          <div className="flex justify-between text-[10px] font-mono" style={{ color: '#859398' }}>
             <span>Updated</span>
             <span>{formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}</span>
           </div>
-          <div className="flex justify-between text-[10px] font-mono" style={{ color: '#484F58' }}>
+          <div className="flex justify-between text-[10px] font-mono" style={{ color: '#859398' }}>
             <span>Source</span>
             <span>{task.source}</span>
           </div>
@@ -207,8 +207,8 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
             disabled={saving}
             className="flex-1 py-2 rounded text-[11px] font-bold uppercase tracking-widest transition-opacity duration-100"
             style={{
-              backgroundColor: '#FFB300',
-              color: '#0D1117',
+              background: 'linear-gradient(135deg,#3cd7ff,#5df6e0)',
+              color: '#001f27',
               fontFamily: 'var(--font-jetbrains-mono)',
               opacity: saving ? 0.6 : 1,
               cursor: saving ? 'not-allowed' : 'pointer',
@@ -221,9 +221,9 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
             disabled={deleting}
             className="px-4 py-2 rounded text-[11px] font-bold uppercase tracking-widest transition-all duration-100"
             style={{
-              backgroundColor: 'rgba(248,81,73,0.1)',
-              color: '#F85149',
-              border: '0.5px solid rgba(248,81,73,0.3)',
+              backgroundColor: 'rgba(255,180,171,0.1)',
+              color: '#ffb4ab',
+              border: '0.5px solid rgba(255,180,171,0.25)',
               fontFamily: 'var(--font-jetbrains-mono)',
               opacity: deleting ? 0.6 : 1,
               cursor: deleting ? 'not-allowed' : 'pointer',
