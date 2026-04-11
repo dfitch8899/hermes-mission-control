@@ -72,12 +72,13 @@ export default function SideNavBar() {
             <Link
               key={item.path}
               href={item.path}
-              className="flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-300 relative overflow-hidden"
+              className="flex items-center gap-4 px-3 py-3 rounded-xl relative overflow-hidden"
               style={{
                 color: isActive ? '#3cd7ff' : '#859398',
                 background: isActive ? 'rgba(60, 215, 255, 0.08)' : 'transparent',
                 borderRight: isActive ? '2px solid #3cd7ff' : '2px solid transparent',
                 boxShadow: isActive ? 'inset 0 0 20px rgba(60, 215, 255, 0.05)' : 'none',
+                transition: 'color 0.2s ease, background-color 0.2s ease',
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
@@ -115,11 +116,12 @@ export default function SideNavBar() {
       {/* Deploy button */}
       <div className="px-3 pb-4">
         <button
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-300 active:scale-95 relative overflow-hidden"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl active:scale-95 relative overflow-hidden"
           style={{
             background: 'rgba(60, 215, 255, 0.06)',
             border: '1px solid rgba(60, 215, 255, 0.15)',
             color: '#3cd7ff',
+            transition: 'background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'rgba(60, 215, 255, 0.12)'

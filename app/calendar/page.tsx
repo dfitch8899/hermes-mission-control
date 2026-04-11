@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import TopAppBar from '@/components/layout/TopAppBar'
 import CalendarGrid from '@/components/calendar/CalendarGrid'
 import EventList from '@/components/calendar/EventList'
@@ -14,6 +14,9 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [showAddForm, setShowAddForm] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  const cronCount = useMemo(() => events.filter(e => e.type === 'cron').length, [events])
+  const plannedCount = useMemo(() => events.filter(e => e.type === 'planned').length, [events])
 
   useEffect(() => {
     fetch('/api/calendar')
@@ -63,16 +66,17 @@ export default function CalendarPage() {
       >
         <div className="flex items-center gap-4">
           <span className="text-[11px] font-mono uppercase tracking-widest text-outline">
-            {events.filter(e => e.type === 'cron').length} cron jobs
+            {cronCount} cron jobs
           </span>
           <span className="text-[11px] font-mono text-outline">·</span>
           <span className="text-[11px] font-mono" style={{ color: '#5df6e0' }}>
-            {events.filter(e => e.type === 'planned').length} planned
+            {plannedCount} planned
           </span>
         </div>
         <button
           onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-mono uppercase tracking-widest transition-all duration-100"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-mono uppercase tracking-widest"
+
           style={{
             backgroundColor: 'rgba(93,246,224,0.08)',
             color: '#5df6e0',

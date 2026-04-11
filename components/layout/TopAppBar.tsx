@@ -54,13 +54,14 @@ export default function TopAppBar({ breadcrumb }: TopAppBarProps) {
       {/* Center: search */}
       <div className="flex-1 max-w-sm mx-8">
         <div
-          className="flex items-center gap-2 px-3 h-8 rounded-lg transition-all duration-300"
+          className="flex items-center gap-2 px-3 h-8 rounded-lg"
           style={{
             background: searchFocused ? 'rgba(60, 215, 255, 0.04)' : 'rgba(255, 255, 255, 0.03)',
             border: searchFocused
               ? '1px solid rgba(60, 215, 255, 0.3)'
               : '1px solid rgba(255, 255, 255, 0.06)',
             boxShadow: searchFocused ? '0 0 20px rgba(60, 215, 255, 0.08)' : 'none',
+            transition: 'background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
           }}
         >
           <Search size={13} className="text-outline" />
@@ -103,7 +104,8 @@ export default function TopAppBar({ breadcrumb }: TopAppBarProps) {
 
         {/* Bell */}
         <button
-          className="w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 text-outline"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-outline"
+          style={{ transition: 'background-color 0.15s ease, color 0.15s ease' }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'rgba(60, 215, 255, 0.06)'
             e.currentTarget.style.color = '#3cd7ff'

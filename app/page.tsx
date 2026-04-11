@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import TopAppBar from '@/components/layout/TopAppBar'
 import MetricCard from '@/components/overview/MetricCard'
 import ActivityFeed from '@/components/overview/ActivityFeed'
@@ -69,15 +69,15 @@ export default function OverviewPage() {
     fetch('/api/calendar').then(r => r.ok ? r.json() : null).then(d => { if (d?.events?.length) setEvents(d.events) }).catch(() => {})
   }, [])
 
-  const inProgressTasks = tasks.filter(t => t.status === 'in_progress')
-  const completedTasks = tasks.filter(t => t.status === 'done')
-  const recentTasks = [...tasks].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5)
-  const recentMemories = [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3)
-  const upcomingEvents = [...events].sort((a, b) => new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime()).slice(0, 3)
+  const inProgressTasks = useMemo(() => tasks.filter(t => t.status === 'in_progress'), [tasks])
+  const completedTasks = useMemo(() => tasks.filter(t => t.status === 'done'), [tasks])
+  const recentTasks = useMemo(() => [...tasks].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5), [tasks])
+  const recentMemories = useMemo(() => [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3), [memories])
+  const upcomingEvents = useMemo(() => [...events].sort((a, b) => new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime()).slice(0, 3), [events])
   const nextEvent = upcomingEvents[0]
 
-  const taskCompletionRate = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0
-  const memoryUtilization = Math.min(Math.round((memories.length / 10) * 100), 100)
+  const taskCompletionRate = useMemo(() => tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0, [tasks, completedTasks])
+  const memoryUtilization = useMemo(() => Math.min(Math.round((memories.length / 10) * 100), 100), [memories])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -101,18 +101,14 @@ export default function OverviewPage() {
         }}
       />
 
-      {/* Ambient orbs for depth */}
+      {/* Ambient orbs for depth — static radial gradients, no blur filter */}
       <div
         className="ambient-orb"
-        style={{ width: 400, height: 400, top: '5%', left: '10%', background: 'rgba(60, 215, 255, 0.03)', zIndex: 1 }}
+        style={{ width: 400, height: 400, top: '5%', left: '10%', '--orb-color': 'rgba(60, 215, 255, 0.03)', zIndex: 1 } as React.CSSProperties}
       />
       <div
         className="ambient-orb"
-        style={{ width: 300, height: 300, bottom: '10%', right: '15%', background: 'rgba(93, 246, 224, 0.025)', animationDelay: '-8s', zIndex: 1 }}
-      />
-      <div
-        className="ambient-orb"
-        style={{ width: 250, height: 250, top: '40%', right: '5%', background: 'rgba(147, 51, 234, 0.02)', animationDelay: '-15s', zIndex: 1 }}
+        style={{ width: 300, height: 300, bottom: '10%', right: '15%', '--orb-color': 'rgba(93, 246, 224, 0.025)', zIndex: 1 } as React.CSSProperties}
       />
 
       <TopAppBar breadcrumb={['Hermes', 'Overview']} />

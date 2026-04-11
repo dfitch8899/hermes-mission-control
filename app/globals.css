@@ -37,13 +37,14 @@ body::before {
     radial-gradient(ellipse 900px 700px at 15% 25%, rgba(60, 215, 255, 0.06), transparent),
     radial-gradient(ellipse 700px 900px at 85% 75%, rgba(147, 51, 234, 0.04), transparent),
     radial-gradient(ellipse 1100px 500px at 50% 50%, rgba(93, 246, 224, 0.035), transparent);
-  animation: ambientDrift 25s ease-in-out infinite alternate;
+  animation: ambientDrift 40s ease-in-out infinite alternate;
+  contain: strict;
 }
 
 @keyframes ambientDrift {
-  0%   { opacity: 0.8; filter: hue-rotate(0deg); }
-  50%  { opacity: 1;   filter: hue-rotate(8deg); }
-  100% { opacity: 0.7; filter: hue-rotate(-5deg); }
+  0%   { opacity: 0.8; }
+  50%  { opacity: 1;   }
+  100% { opacity: 0.7; }
 }
 
 /* ─── Subtle Grid Overlay ─── */
@@ -59,17 +60,19 @@ body::after {
   background-size: 60px 60px;
   mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(0,0,0,0.5) 0%, transparent 70%);
   -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(0,0,0,0.5) 0%, transparent 70%);
+  contain: strict;
 }
 
 /* ─── Glass Panel Variants ─── */
 
 /* Standard glass — sidebars, dialogs */
 .glass-panel {
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  background: rgba(25, 31, 48, 0.25);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  background: rgba(25, 31, 48, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  contain: layout style paint;
 }
 
 /* Content cards — hover-lift, border glow */
@@ -78,8 +81,13 @@ body::after {
   -webkit-backdrop-filter: blur(12px);
   background: rgba(47, 52, 70, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.07);
-  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  transition: background-color 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+              border-color 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+              transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 0.4s cubic-bezier(0.23, 1, 0.32, 1);
   position: relative;
+  will-change: transform;
+  contain: layout style;
 }
 
 .glass-card::before {
@@ -102,6 +110,7 @@ body::after {
   opacity: 0;
   transition: opacity 0.4s ease;
   pointer-events: none;
+  will-change: opacity;
 }
 
 .glass-card:hover {
@@ -119,15 +128,18 @@ body::after {
 
 /* Accent-bordered glass — for hero/featured panels */
 .glass-card-glow {
-  backdrop-filter: blur(16px) saturate(200%);
-  -webkit-backdrop-filter: blur(16px) saturate(200%);
-  background: rgba(25, 31, 48, 0.35);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  background: rgba(25, 31, 48, 0.45);
   border: 1px solid rgba(60, 215, 255, 0.12);
   box-shadow:
     0 0 40px -10px rgba(60, 215, 255, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   position: relative;
   overflow: hidden;
+  contain: layout style paint;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .glass-card-glow::after {
@@ -145,7 +157,8 @@ body::after {
     rgba(60, 215, 255, 0.4) 70%,
     transparent 100%
   );
-  animation: shimmerBorder 6s ease-in-out infinite;
+  animation: shimmerBorder 10s ease-in-out infinite;
+  will-change: transform;
 }
 
 @keyframes shimmerBorder {
@@ -181,6 +194,8 @@ body::after {
 /* ─── Sidebar ─── */
 .sidebar-spring {
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width;
+  contain: layout style;
 }
 
 /* ─── Entry Animations ─── */
@@ -247,8 +262,8 @@ body::after {
 }
 
 @keyframes breatheGlow {
-  0%, 100% { box-shadow: 0 0 20px -4px rgba(60, 215, 255, 0.15); }
-  50%      { box-shadow: 0 0 40px -4px rgba(60, 215, 255, 0.3); }
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
 }
 
 @keyframes progressPulse {
@@ -263,11 +278,15 @@ body::after {
 .animate-pulse-amber { animation: pulseGlow 2s ease-in-out infinite; }
 
 .animate-live-pulse {
-  animation: livePulse 2s ease-in-out infinite;
+  animation: livePulse 3s ease-in-out infinite;
+  will-change: box-shadow;
+  transform: translateZ(0);
+  contain: layout style paint;
 }
 
 .animate-breathe-glow {
   animation: breatheGlow 4s ease-in-out infinite;
+  will-change: opacity;
 }
 
 /* ─── Scan Line Effect ─── */
@@ -279,19 +298,21 @@ body::after {
 .scan-line::after {
   content: '';
   position: absolute;
+  top: 0;
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(60, 215, 255, 0.25), rgba(93, 246, 224, 0.3), rgba(60, 215, 255, 0.25), transparent);
-  box-shadow: 0 0 12px 2px rgba(60, 215, 255, 0.1);
-  animation: scanDown 10s linear infinite;
+  background: linear-gradient(90deg, transparent, rgba(60, 215, 255, 0.2), rgba(93, 246, 224, 0.25), rgba(60, 215, 255, 0.2), transparent);
+  animation: scanDown 14s linear infinite;
   pointer-events: none;
   z-index: 10;
+  will-change: transform;
+  contain: strict;
 }
 
 @keyframes scanDown {
-  0%   { top: -1px; }
-  100% { top: 100%; }
+  0%   { transform: translateY(-1px); }
+  100% { transform: translateY(calc(100vh + 1px)); }
 }
 
 /* ─── Progress Ring Animation ─── */
@@ -326,18 +347,19 @@ body::after {
 }
 
 /* ─── Ambient Orb (decorative element) ─── */
-@keyframes orbFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  25%      { transform: translate(30px, -20px) scale(1.05); }
-  50%      { transform: translate(-10px, 15px) scale(0.95); }
-  75%      { transform: translate(-25px, -10px) scale(1.02); }
-}
-
+/* Uses radial-gradient instead of filter: blur(80px) — visually identical, zero per-frame cost */
 .ambient-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
   pointer-events: none;
-  animation: orbFloat 20s ease-in-out infinite;
-  will-change: transform;
+  background: none !important;
+  contain: strict;
+}
+
+.ambient-orb::after {
+  content: '';
+  position: absolute;
+  inset: -80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orb-color, rgba(60, 215, 255, 0.03)) 0%, transparent 70%);
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import type { Memory, MemoryType } from '@/types/memory'
 import MemoryCard from './MemoryCard'
 import MemorySearch from './MemorySearch'
@@ -20,14 +20,21 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
   const [sourceFilter, setSourceFilter] = useState<'all' | 'hermes' | 'user'>('all')
   const [sortBy, setSortBy] = useState<SortOption>('relevance')
 
-  const typeCounts = {
+  const typeCounts = useMemo(() => ({
     context: initialMemories.filter((m) => m.type === 'context').length,
     skill: initialMemories.filter((m) => m.type === 'skill').length,
     improvement: initialMemories.filter((m) => m.type === 'improvement').length,
-  }
+  }), [initialMemories])
 
   // Collect all unique tags
-  const allTags = Array.from(new Set(initialMemories.flatMap((m) => m.tags))).slice(0, 20)
+  const allTags = useMemo(
+    () => Array.from(new Set(initialMemories.flatMap((m) => m.tags))).slice(0, 20),
+    [initialMemories]
+  )
+
+  const handleCardClick = useCallback((memory: Memory) => {
+    setSelectedMemory(memory)
+  }, [])
 
   const toggleType = (type: MemoryType) => {
     setTypeFilters((prev) =>
@@ -35,7 +42,7 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
     )
   }
 
-  const filtered = memories
+  const filtered = useMemo(() => memories
     .filter((m) => {
       if (typeFilters.length > 0 && !typeFilters.includes(m.type)) return false
       if (sourceFilter !== 'all' && m.source !== sourceFilter) return false
@@ -54,7 +61,7 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
       if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       if (sortBy === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       return a.title.localeCompare(b.title)
-    })
+    }), [memories, typeFilters, sourceFilter, searchQuery, sortBy])
 
   const labelStyle: React.CSSProperties = {
     fontSize: '10px',
@@ -212,7 +219,7 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
               key={memory.memoryId}
               memory={memory}
               index={i}
-              onClick={() => setSelectedMemory(memory)}
+              onClick={() => handleCardClick(memory)}
             />
           ))}
 

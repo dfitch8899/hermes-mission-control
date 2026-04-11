@@ -1,5 +1,7 @@
 'use client'
 
+import React from 'react'
+
 interface MetricCardProps {
   label: string
   value: React.ReactNode
@@ -28,7 +30,7 @@ function ProgressRing({ value, color, size = 52 }: { value: number; color: strin
   const offset = circumference - (value / 100) * circumference
 
   return (
-    <svg width={size} height={size} className="shrink-0" style={{ filter: `drop-shadow(0 0 6px ${color}40)` }}>
+    <svg width={size} height={size} className="shrink-0">
       {/* Track */}
       <circle
         cx={size / 2}
@@ -66,7 +68,7 @@ function ProgressRing({ value, color, size = 52 }: { value: number; color: strin
   )
 }
 
-export default function MetricCard({ label, value, sub, accent = 'cyan', live, icon, progress }: MetricCardProps) {
+function MetricCardInner({ label, value, sub, accent = 'cyan', live, icon, progress }: MetricCardProps) {
   const a = accentMap[accent] ?? accentMap.cyan
 
   return (
@@ -139,3 +141,6 @@ export default function MetricCard({ label, value, sub, accent = 'cyan', live, i
     </div>
   )
 }
+
+const MetricCard = React.memo(MetricCardInner)
+export default MetricCard

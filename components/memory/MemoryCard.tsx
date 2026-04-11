@@ -15,16 +15,19 @@ const typeBadge: Record<MemoryType, { label: string; color: string; bg: string; 
   improvement: { label: 'IMPROVEMENT', color: '#5df6e0', bg: 'rgba(93,246,224,0.1)', border: 'rgba(93,246,224,0.25)' },
 }
 
-export default function MemoryCard({ memory, onClick, index = 0 }: MemoryCardProps) {
+import React from 'react'
+
+function MemoryCardInner({ memory, onClick, index = 0 }: MemoryCardProps) {
   const badge = typeBadge[memory.type]
 
   return (
     <article
-      className="rounded-xl p-4 cursor-pointer flex flex-col gap-3 animate-slide-in-left transition-all duration-150"
+      className="rounded-xl p-4 cursor-pointer flex flex-col gap-3 animate-slide-in-left"
       style={{
         animationDelay: `${index * 60}ms`,
         backgroundColor: 'rgba(47,52,70,0.3)',
         border: '1px solid rgba(255,255,255,0.08)',
+        transition: 'background-color 0.15s ease, border-color 0.15s ease',
       }}
       onClick={onClick}
       onMouseEnter={(e) => {
@@ -120,3 +123,6 @@ export default function MemoryCard({ memory, onClick, index = 0 }: MemoryCardPro
     </article>
   )
 }
+
+const MemoryCard = React.memo(MemoryCardInner)
+export default MemoryCard

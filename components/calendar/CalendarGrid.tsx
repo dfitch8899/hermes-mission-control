@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { CalendarEvent } from '@/types/calendar'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, isSameDay } from 'date-fns'
@@ -16,18 +16,31 @@ interface CalendarGridProps {
 export default function CalendarGrid({ events, selectedDate, onSelectDate }: CalendarGridProps) {
   const [viewDate, setViewDate] = useState(new Date())
 
-  const monthStart = startOfMonth(viewDate)
-  const monthEnd = endOfMonth(viewDate)
-  const calStart = startOfWeek(monthStart)
-  const calEnd = endOfWeek(monthEnd)
-  const days = eachDayOfInterval({ start: calStart, end: calEnd })
+  const days = useMemo(() => {
+    const monthStart = startOfMonth(viewDate)
+    const monthEnd = endOfMonth(viewDate)
+    const calStart = startOfWeek(monthStart)
+    const calEnd = endOfWeek(monthEnd)
+    return eachDayOfInterval({ start: calStart, end: calEnd })
+  }, [viewDate])
 
-  const getEventsForDay = (day: Date) => {
-    return events.filter((e) => {
+  // Pre-build a date->events map once instead of filtering all events for every cell
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>()
+    for (const e of events) {
       const d = new Date(e.type === 'cron' ? e.nextRun : e.scheduledAt)
-      return isSameDay(d, day)
-    })
-  }
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+      const arr = map.get(key)
+      if (arr) arr.push(e)
+      else map.set(key, [e])
+    }
+    return map
+  }, [events])
+
+  const getEventsForDay = useCallback((day: Date) => {
+    const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`
+    return eventsByDate.get(key) || []
+  }, [eventsByDate])
 
   return (
     <div className="rounded-2xl glass-card overflow-hidden">
@@ -38,7 +51,7 @@ export default function CalendarGrid({ events, selectedDate, onSelectDate }: Cal
       >
         <button
           onClick={() => setViewDate((d) => new Date(d.getFullYear(), d.getMonth() - 1))}
-          className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 text-outline"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-outline"
           onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
         >
@@ -49,7 +62,7 @@ export default function CalendarGrid({ events, selectedDate, onSelectDate }: Cal
         </span>
         <button
           onClick={() => setViewDate((d) => new Date(d.getFullYear(), d.getMonth() + 1))}
-          className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 text-outline"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-outline"
           onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
         >
@@ -82,7 +95,7 @@ export default function CalendarGrid({ events, selectedDate, onSelectDate }: Cal
             <div
               key={day.toISOString()}
               onClick={() => inMonth && onSelectDate(day)}
-              className="min-h-[64px] p-2 transition-colors duration-100"
+              className="min-h-[64px] p-2"
               style={{
                 borderBottom: '1px solid rgba(255,255,255,0.04)',
                 opacity: inMonth ? 1 : 0.25,

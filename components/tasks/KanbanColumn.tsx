@@ -44,7 +44,7 @@ export default function KanbanColumn({ status, label, tasks, accentColor, onTask
       {/* Drop zone */}
       <div
         ref={setNodeRef}
-        className="flex-1 overflow-y-auto rounded-xl p-2 space-y-2 transition-all duration-200"
+        className="flex-1 overflow-y-auto rounded-xl p-2 space-y-2"
         style={{
           background: isOver
             ? `rgba(${accentColor === '#a8e8ff' ? '168,232,255' : '93,246,224'},0.04)`
@@ -53,6 +53,7 @@ export default function KanbanColumn({ status, label, tasks, accentColor, onTask
             ? `1px solid ${accentColor}40`
             : '1px solid rgba(255,255,255,0.06)',
           minHeight: 120,
+          transition: 'background-color 0.2s ease, border-color 0.2s ease',
         }}
       >
         <SortableContext items={tasks.map((t) => t.taskId)} strategy={verticalListSortingStrategy}>

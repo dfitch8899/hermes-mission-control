@@ -27,7 +27,9 @@ const assigneeColor = {
 
 const assigneeInitials = { hermes: 'H', human: 'U', both: 'B' }
 
-export default function TaskCard({ task, index = 0, onClick }: TaskCardProps) {
+import React from 'react'
+
+function TaskCardInner({ task, index = 0, onClick }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.taskId })
 
   const style: React.CSSProperties = {
@@ -47,11 +49,12 @@ export default function TaskCard({ task, index = 0, onClick }: TaskCardProps) {
       {...listeners}
     >
       <div
-        className="rounded-xl p-4 cursor-pointer select-none transition-all duration-200"
+        className="rounded-xl p-4 cursor-pointer select-none"
         style={{
           background: isDragging ? 'rgba(60,215,255,0.08)' : 'rgba(47,52,70,0.3)',
           border: isDragging ? '1px solid rgba(60,215,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
           borderLeft: `3px solid ${acColor}`,
+          transition: 'background-color 0.2s ease, border-color 0.2s ease',
         }}
         onClick={(e) => { e.stopPropagation(); onClick?.() }}
         onMouseEnter={(e) => {
@@ -116,3 +119,6 @@ export default function TaskCard({ task, index = 0, onClick }: TaskCardProps) {
     </div>
   )
 }
+
+const TaskCard = React.memo(TaskCardInner)
+export default TaskCard
