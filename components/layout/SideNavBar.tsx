@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, CheckSquare, Brain, Calendar, Terminal, Zap } from 'lucide-react'
+import { Home, CheckSquare, Brain, Calendar, Terminal, MessageSquare } from 'lucide-react'
 
 const navItems = [
   { path: '/', icon: Home, label: 'Overview' },
   { path: '/tasks', icon: CheckSquare, label: 'Tasks' },
   { path: '/memory', icon: Brain, label: 'Memory' },
+  { path: '/chat', icon: MessageSquare, label: 'Chat' },
   { path: '/calendar', icon: Calendar, label: 'Calendar' },
   { path: '/terminal', icon: Terminal, label: 'Terminal' },
 ]
@@ -112,32 +113,6 @@ export default function SideNavBar() {
           )
         })}
       </nav>
-
-      {/* Deploy button */}
-      <div className="px-3 pb-4">
-        <button
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl active:scale-95 relative overflow-hidden"
-          style={{
-            background: 'rgba(60, 215, 255, 0.06)',
-            border: '1px solid rgba(60, 215, 255, 0.15)',
-            color: '#3cd7ff',
-            transition: 'background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(60, 215, 255, 0.12)'
-            e.currentTarget.style.boxShadow = '0 0 20px rgba(60, 215, 255, 0.15)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(60, 215, 255, 0.06)'
-            e.currentTarget.style.boxShadow = 'none'
-          }}
-        >
-          <Zap size={16} className="shrink-0" />
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-label font-bold uppercase tracking-widest whitespace-nowrap overflow-hidden">
-            Deploy Agent
-          </span>
-        </button>
-      </div>
 
       {/* Bottom status */}
       <div className="px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>

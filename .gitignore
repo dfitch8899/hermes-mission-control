@@ -41,3 +41,4 @@ Thumbs.db
 
 # testing
 coverage/
+.claude/worktrees/

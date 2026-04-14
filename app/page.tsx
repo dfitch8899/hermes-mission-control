@@ -71,7 +71,10 @@ export default function OverviewPage() {
 
   const inProgressTasks = useMemo(() => tasks.filter(t => t.status === 'in_progress'), [tasks])
   const completedTasks = useMemo(() => tasks.filter(t => t.status === 'done'), [tasks])
-  const recentTasks = useMemo(() => [...tasks].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5), [tasks])
+  const recentTasks = useMemo(() => [...tasks].sort((a, b) => {
+    const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    return diff !== 0 ? diff : a.taskId.localeCompare(b.taskId)
+  }).slice(0, 5), [tasks])
   const recentMemories = useMemo(() => [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3), [memories])
   const upcomingEvents = useMemo(() => [...events].sort((a, b) => new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime()).slice(0, 3), [events])
   const nextEvent = upcomingEvents[0]
@@ -113,7 +116,7 @@ export default function OverviewPage() {
 
       <TopAppBar breadcrumb={['Hermes', 'Overview']} />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 scan-line" style={{ position: 'relative', zIndex: 2 }}>
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 scan-line" style={{ position: 'relative', zIndex: 2 }} suppressHydrationWarning>
         {/* Hero header */}
         <div className="flex items-end justify-between animate-fade-in-up">
           <div>

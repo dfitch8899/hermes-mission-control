@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   DndContext,
   DragEndEvent,
@@ -19,6 +19,7 @@ import TaskSlideOver from './TaskSlideOver'
 
 interface KanbanBoardProps {
   initialTasks: Task[]
+  onRegisterAddTask?: (fn: (task: Task) => void) => void
 }
 
 const COLUMNS: { status: TaskStatus; label: string; accentColor: string }[] = [
@@ -29,8 +30,17 @@ const COLUMNS: { status: TaskStatus; label: string; accentColor: string }[] = [
   { status: 'possible', label: 'Possible', accentColor: '#14B8A6' },
 ]
 
-export default function KanbanBoard({ initialTasks }: KanbanBoardProps) {
+export default function KanbanBoard({ initialTasks, onRegisterAddTask }: KanbanBoardProps) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
+
+  useEffect(() => {
+    if (onRegisterAddTask) {
+      onRegisterAddTask((task: Task) => {
+        setTasks((prev) => [task, ...prev])
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [activeTask, setActiveTask] = useState<Task | null>(null)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [slideOverOpen, setSlideOverOpen] = useState(false)

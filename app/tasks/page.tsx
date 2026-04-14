@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import TopAppBar from '@/components/layout/TopAppBar'
 import KanbanBoard from '@/components/tasks/KanbanBoard'
+import NewTaskModal from '@/components/tasks/NewTaskModal'
 import { MOCK_TASKS } from '@/lib/mockData'
 import type { Task } from '@/types/task'
 import { Plus } from 'lucide-react'
@@ -10,6 +11,8 @@ import { Plus } from 'lucide-react'
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
   const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const addTaskToBoard = useRef<((task: Task) => void) | null>(null)
 
   useEffect(() => {
     fetch('/api/tasks')
@@ -20,6 +23,11 @@ export default function TasksPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  const handleTaskCreated = (task: Task) => {
+    setTasks(prev => [task, ...prev])
+    if (addTaskToBoard.current) addTaskToBoard.current(task)
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -50,6 +58,7 @@ export default function TasksPage() {
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(60,215,255,0.15)' }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(60,215,255,0.08)' }}
+          onClick={() => setModalOpen(true)}
         >
           <Plus size={13} />
           New Task
@@ -63,9 +72,18 @@ export default function TasksPage() {
             Loading tasks...
           </div>
         ) : (
-          <KanbanBoard initialTasks={tasks} />
+          <KanbanBoard
+            initialTasks={tasks}
+            onRegisterAddTask={(fn) => { addTaskToBoard.current = fn }}
+          />
         )}
       </div>
+
+      <NewTaskModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={handleTaskCreated}
+      />
     </div>
   )
 }

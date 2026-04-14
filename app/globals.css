@@ -292,7 +292,6 @@ body::after {
 /* ─── Scan Line Effect ─── */
 .scan-line {
   position: relative;
-  overflow: hidden;
 }
 
 .scan-line::after {
