@@ -43,7 +43,10 @@ export async function GET(req: NextRequest) {
     })
 
     const result = await ddb.send(cmd)
-    return NextResponse.json({ memories: result.Items || [] })
+    const items = (result.Items || []) as Memory[]
+    // Filter out internal sync metadata record
+    const memories = items.filter(m => m.memoryId !== '_HERMES_SYNC_META')
+    return NextResponse.json({ memories })
   } catch (err) {
     console.error('[api/memories GET]', err)
     let memories = MOCK_MEMORIES

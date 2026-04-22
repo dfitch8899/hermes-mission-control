@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import type { Memory, MemoryType } from '@/types/memory'
 import MemoryCard from './MemoryCard'
 import MemorySearch from './MemorySearch'
@@ -20,16 +20,20 @@ export default function MemoryGrid({ initialMemories }: MemoryGridProps) {
   const [sourceFilter, setSourceFilter] = useState<'all' | 'hermes' | 'user'>('all')
   const [sortBy, setSortBy] = useState<SortOption>('relevance')
 
-  const typeCounts = useMemo(() => ({
-    context: initialMemories.filter((m) => m.type === 'context').length,
-    skill: initialMemories.filter((m) => m.type === 'skill').length,
-    improvement: initialMemories.filter((m) => m.type === 'improvement').length,
-  }), [initialMemories])
+  // Keep in sync when parent re-fetches
+  useEffect(() => { setMemories(initialMemories) }, [initialMemories])
 
-  // Collect all unique tags
+  // Always computed from live memories state, not just initial snapshot
+  const typeCounts = useMemo(() => ({
+    context:     memories.filter((m) => m.type === 'context').length,
+    skill:       memories.filter((m) => m.type === 'skill').length,
+    improvement: memories.filter((m) => m.type === 'improvement').length,
+  }), [memories])
+
+  // Collect all unique tags from live memories
   const allTags = useMemo(
-    () => Array.from(new Set(initialMemories.flatMap((m) => m.tags))).slice(0, 20),
-    [initialMemories]
+    () => Array.from(new Set(memories.flatMap((m) => m.tags))).slice(0, 20),
+    [memories]
   )
 
   const handleCardClick = useCallback((memory: Memory) => {
