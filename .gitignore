@@ -41,5 +41,7 @@ Thumbs.db
 
 # testing
 coverage/
+
+# Claude Code — local / machine-only (API keys, AWS creds, env in strings, PII)
 .claude/worktrees/
-.claude/settings.local.json
+.claude/**/*.local.json
