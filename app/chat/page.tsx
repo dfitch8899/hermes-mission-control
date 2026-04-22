@@ -116,7 +116,7 @@ function AssistantBubble({ message }: { message: Message }) {
   )
 }
 
-function ThinkingIndicator() {
+function ThinkingIndicator({ status }: { status?: string }) {
   return (
     <div className="flex items-start gap-3 mb-4">
       <div
@@ -138,7 +138,7 @@ function ThinkingIndicator() {
           color: '#5df6e0',
         }}
       >
-        <span className="animate-pulse-glow">Hermes is thinking...</span>
+        <span className="animate-pulse-glow">{status || 'Hermes is thinking...'}</span>
       </div>
     </div>
   )
@@ -154,6 +154,7 @@ export default function ChatPage() {
   ])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [streamStatus, setStreamStatus] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -187,6 +188,7 @@ export default function ChatPage() {
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setIsStreaming(true)
+    setStreamStatus('')
 
     // Build conversation history for API (exclude our greeting seed since it wasn't from API)
     const history = [...messages, userMsg]
@@ -236,7 +238,11 @@ export default function ChatPage() {
             continue
           }
 
-          if (event.type === 'text' && event.delta) {
+          if (event.type === 'status') {
+            setStreamStatus(event.message ?? '')
+          } else if (event.type === 'done') {
+            setStreamStatus('')
+          } else if (event.type === 'text' && event.delta) {
             setMessages(prev =>
               prev.map(m =>
                 m.id === assistantId
@@ -294,6 +300,7 @@ export default function ChatPage() {
       )
     } finally {
       setIsStreaming(false)
+      setStreamStatus('')
     }
   }, [input, isStreaming, messages])
 
@@ -357,7 +364,7 @@ export default function ChatPage() {
           {isStreaming && (() => {
             const last = messages[messages.length - 1]
             return last?.role === 'assistant' && !last.content && (!last.toolCalls || last.toolCalls.length === 0)
-          })() && <ThinkingIndicator />}
+          })() && <ThinkingIndicator status={streamStatus || undefined} />}
 
           <div ref={messagesEndRef} />
         </div>

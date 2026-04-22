@@ -42,3 +42,4 @@ Thumbs.db
 # testing
 coverage/
 .claude/worktrees/
+.claude/settings.local.json

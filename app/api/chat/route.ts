@@ -1,182 +1,132 @@
+/**
+ * Mission Control → Hermes Chat Relay
+ *
+ * Posts as a real user (xoxp-) so Hermes treats it as a human message.
+ * Prefixes every message with "[Mission Control]" and the sender's name
+ * so Hermes and Slack both know where it's coming from.
+ * @mentions the Hermes bot so it always triggers a response.
+ */
+
 import { NextRequest } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 
-const client = new Anthropic()
+const BOT_TOKEN      = process.env.SLACK_BOT_TOKEN!
+const USER_TOKEN     = process.env.SLACK_USER_TOKEN!
+const CHANNEL_ID     = process.env.HERMES_SLACK_CHANNEL_ID!
+const HERMES_BOT_ID  = process.env.HERMES_SLACK_BOT_ID!
+const HERMES_USER_ID = process.env.HERMES_SLACK_USER_ID!  // for @mention
 
-const SYSTEM_PROMPT = `You are Hermes, an AI agent mission control assistant. You help manage tasks, memories, and scheduled jobs. When the user asks you to do something, use your tools to make it happen. Be concise and confirm what you did.`
+const POLL_INTERVAL_MS  = 1500
+const POLL_TIMEOUT_MS   = 30000
+const SETTLE_AFTER_MS   = 3500  // wait this long with no new Hermes messages before returning
 
-const tools: Anthropic.Tool[] = [
-  {
-    name: 'create_task',
-    description: 'Create a new task in the mission control system',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        title: { type: 'string', description: 'Task title' },
-        description: { type: 'string', description: 'Task description' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high', 'critical'], description: 'Task priority' },
-        assignee: { type: 'string', description: 'Assignee (e.g. "human", "hermes", or a name)' },
-      },
-      required: ['title'],
+async function postToSlack(text: string, senderName: string): Promise<{ ts: string; channel: string }> {
+  // Format: "@Hermes Agent [Mission Control – Kyle] what tasks are pending?"
+  // The @mention triggers app_mention event regardless of who's posting
+  const formatted = `<@${HERMES_USER_ID}> [Mission Control${senderName ? ` – ${senderName}` : ''}] ${text}`
+
+  const res = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${USER_TOKEN}`,
+      'Content-Type': 'application/json',
     },
-  },
-  {
-    name: 'list_tasks',
-    description: 'List tasks from the mission control system, optionally filtered by status',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        status: { type: 'string', enum: ['queued', 'in_progress', 'done', 'blocked'], description: 'Filter by status' },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'create_memory',
-    description: 'Store a new memory or piece of information in the system',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        title: { type: 'string', description: 'Memory title' },
-        content: { type: 'string', description: 'Memory content' },
-        type: { type: 'string', enum: ['context', 'decision', 'insight', 'reference'], description: 'Memory type' },
-      },
-      required: ['title', 'content'],
-    },
-  },
-  {
-    name: 'list_memories',
-    description: 'List stored memories from the system',
-    input_schema: {
-      type: 'object' as const,
-      properties: {},
-      required: [],
-    },
-  },
-]
+    body: JSON.stringify({ channel: CHANNEL_ID, text: formatted, as_user: true }),
+  })
+  const data = await res.json()
+  if (!data.ok) throw new Error(`Slack post failed: ${data.error}`)
+  return { ts: data.ts, channel: data.channel }
+}
 
-const BASE_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+async function pollForReply(channel: string, parentTs: string): Promise<string | null> {
+  const deadline = Date.now() + POLL_TIMEOUT_MS
 
-async function executeTool(name: string, input: Record<string, unknown>): Promise<unknown> {
-  switch (name) {
-    case 'create_task': {
-      const res = await fetch(`${BASE_URL}/api/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      })
-      return res.json()
+  // Track the most recent Hermes reply so we return the *final* answer,
+  // not the first "thinking" indicator (:clipboard: todo...) Hermes posts.
+  let lastHermesTs   = ''
+  let lastHermesText: string | null = null
+  let lastNewAt      = 0  // wall-clock time when we last saw a NEW Hermes message
+
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS))
+
+    const res = await fetch(
+      `https://slack.com/api/conversations.replies?channel=${channel}&ts=${parentTs}&limit=20`,
+      { headers: { Authorization: `Bearer ${BOT_TOKEN}` } }
+    )
+    const data = await res.json()
+    if (!data.ok) continue
+
+    const messages: Array<{ ts: string; bot_id?: string; text: string }> = data.messages ?? []
+
+    // Collect all Hermes replies in chronological order (skip the root message itself)
+    const hermesReplies = messages.filter(
+      m => m.bot_id === HERMES_BOT_ID && m.ts !== parentTs
+    )
+    if (hermesReplies.length === 0) continue
+
+    // The last reply in the thread is the most recent message from Hermes
+    const latest = hermesReplies[hermesReplies.length - 1]
+
+    if (latest.ts !== lastHermesTs) {
+      // A new (or first) Hermes message appeared — reset the settle timer
+      lastHermesTs   = latest.ts
+      lastHermesText = latest.text
+      lastNewAt      = Date.now()
+    } else if (lastNewAt > 0 && Date.now() - lastNewAt >= SETTLE_AFTER_MS) {
+      // Hermes has stopped adding messages for SETTLE_AFTER_MS — it's done
+      return lastHermesText
     }
-    case 'list_tasks': {
-      const url = new URL(`${BASE_URL}/api/tasks`)
-      if (input.status) url.searchParams.set('status', input.status as string)
-      const res = await fetch(url.toString())
-      return res.json()
-    }
-    case 'create_memory': {
-      const res = await fetch(`${BASE_URL}/api/memories`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      })
-      return res.json()
-    }
-    case 'list_memories': {
-      const res = await fetch(`${BASE_URL}/api/memories`)
-      return res.json()
-    }
-    default:
-      return { error: `Unknown tool: ${name}` }
   }
+
+  // On timeout return whatever we collected (may be null if Hermes never replied)
+  return lastHermesText
 }
 
 export async function POST(req: NextRequest) {
   const { messages } = await req.json()
 
+  // Get the logged-in user's name to attribute the message
+  const session = await getServerSession(authOptions)
+  const senderName = session?.user?.name ?? session?.user?.email ?? ''
+
+  const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === 'user')
+  if (!lastUser) return new Response(JSON.stringify({ error: 'No user message' }), { status: 400 })
+
+  const userText = typeof lastUser.content === 'string'
+    ? lastUser.content
+    : lastUser.content?.map((b: { text?: string }) => b.text).join(' ')
+
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
     async start(controller) {
+      const send = (obj: object) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
+
       try {
-        const conversationMessages: Anthropic.MessageParam[] = messages
+        send({ type: 'status', message: 'Sending to Hermes...' })
+        const post = await postToSlack(userText, senderName)
 
-        // Agentic loop — keep going while Claude wants to use tools
-        while (true) {
-          const response = await client.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 4096,
-            system: SYSTEM_PROMPT,
-            tools,
-            messages: conversationMessages,
+        send({ type: 'status', message: 'Waiting for Hermes...' })
+        const reply = await pollForReply(post.channel, post.ts)
+
+        if (!reply) {
+          send({
+            type: 'text',
+            delta: "Hermes didn't respond within 30 seconds — it may still be processing. Check Slack for the reply.",
           })
-
-          // Collect tool uses and text from this response
-          const toolUses: Anthropic.ToolUseBlock[] = []
-          const textBlocks: string[] = []
-
-          for (const block of response.content) {
-            if (block.type === 'text') {
-              textBlocks.push(block.text)
-            } else if (block.type === 'tool_use') {
-              toolUses.push(block)
-            }
+        } else {
+          // Strip any Slack mention formatting from Hermes's reply before streaming
+          const clean = reply.replace(/<@[A-Z0-9]+>/g, '').trim()
+          for (const char of clean) {
+            send({ type: 'text', delta: char })
           }
-
-          if (toolUses.length > 0) {
-            // Execute all tool uses and stream tool_call events to the client
-            const toolResults: Anthropic.ToolResultBlockParam[] = []
-
-            for (const toolUse of toolUses) {
-              // Signal tool call to client
-              const toolCallEvent = JSON.stringify({
-                type: 'tool_call',
-                tool: toolUse.name,
-                input: toolUse.input,
-              })
-              controller.enqueue(encoder.encode(`data: ${toolCallEvent}\n\n`))
-
-              const result = await executeTool(toolUse.name, toolUse.input as Record<string, unknown>)
-
-              // Signal tool result to client
-              const toolResultEvent = JSON.stringify({
-                type: 'tool_result',
-                tool: toolUse.name,
-                result,
-              })
-              controller.enqueue(encoder.encode(`data: ${toolResultEvent}\n\n`))
-
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: toolUse.id,
-                content: JSON.stringify(result),
-              })
-            }
-
-            // Add assistant turn + tool results to conversation and continue
-            conversationMessages.push({ role: 'assistant', content: response.content })
-            conversationMessages.push({ role: 'user', content: toolResults })
-
-            if (response.stop_reason === 'end_turn' && toolUses.length === 0) {
-              break
-            }
-            // Continue loop to get final text response
-            continue
-          }
-
-          // No tool uses — stream the text response character by character
-          const finalText = textBlocks.join('')
-          for (const char of finalText) {
-            const textEvent = JSON.stringify({ type: 'text', delta: char })
-            controller.enqueue(encoder.encode(`data: ${textEvent}\n\n`))
-          }
-
-          // Signal done
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-          break
         }
+        send({ type: 'done' })
       } catch (err) {
-        const errorEvent = JSON.stringify({ type: 'error', message: String(err) })
-        controller.enqueue(encoder.encode(`data: ${errorEvent}\n\n`))
+        send({ type: 'error', message: String(err) })
       } finally {
         controller.close()
       }
