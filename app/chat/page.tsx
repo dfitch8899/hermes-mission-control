@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { Suspense, useState, useRef, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import TopAppBar from '@/components/layout/TopAppBar'
 import { ArrowUp } from 'lucide-react'
 
@@ -144,7 +145,9 @@ function ThinkingIndicator({ status }: { status?: string }) {
   )
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -157,6 +160,7 @@ export default function ChatPage() {
   const [streamStatus, setStreamStatus] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const autoExecutedRef = useRef(false)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -175,8 +179,8 @@ export default function ChatPage() {
     ta.style.height = Math.min(ta.scrollHeight, maxH) + 'px'
   }, [input])
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim()
+  const sendMessage = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim()
     if (!text || isStreaming) return
 
     const userMsg: Message = {
@@ -304,6 +308,15 @@ export default function ChatPage() {
     }
   }, [input, isStreaming, messages])
 
+  useEffect(() => {
+    const prompt = searchParams.get('prompt')
+    if (!prompt || autoExecutedRef.current || isStreaming) return
+
+    autoExecutedRef.current = true
+    void sendMessage(prompt)
+    router.replace('/chat')
+  }, [isStreaming, router, searchParams, sendMessage])
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -414,7 +427,7 @@ export default function ChatPage() {
 
           {/* Send button */}
           <button
-            onClick={sendMessage}
+            onClick={() => { void sendMessage() }}
             disabled={!input.trim() || isStreaming}
             className="flex items-center justify-center rounded-xl w-10 h-10 shrink-0 active:scale-95 transition-transform"
             style={{
@@ -440,5 +453,13 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatPageContent />
+    </Suspense>
   )
 }
