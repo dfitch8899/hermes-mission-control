@@ -5,6 +5,7 @@ import SlideOver from '@/components/ui/SlideOver'
 import Badge from '@/components/ui/Badge'
 import type { Task, TaskStatus, TaskAssignee, TaskPriority } from '@/types/task'
 import { formatDistanceToNow } from 'date-fns'
+import { Bot, Loader2 } from 'lucide-react'
 
 interface TaskSlideOverProps {
   task: Task | null
@@ -12,6 +13,7 @@ interface TaskSlideOverProps {
   onClose: () => void
   onSave: (task: Task) => Promise<void>
   onDelete: (taskId: string) => Promise<void>
+  onExecute: (task: Task) => Promise<void>
 }
 
 const priorityBadge = {
@@ -21,10 +23,11 @@ const priorityBadge = {
   low: 'muted' as const,
 }
 
-export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }: TaskSlideOverProps) {
+export default function TaskSlideOver({ task, open, onClose, onSave, onDelete, onExecute }: TaskSlideOverProps) {
   const [form, setForm] = useState<Partial<Task>>({})
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [executing, setExecuting] = useState(false)
 
   useEffect(() => {
     if (task) setForm({ ...task })
@@ -53,6 +56,18 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
     }
   }
 
+  const handleExecute = async () => {
+    setExecuting(true)
+    try {
+      await onExecute({ ...task, ...form } as Task)
+      onClose()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to launch Hermes')
+    } finally {
+      setExecuting(false)
+    }
+  }
+
   const inputStyle: React.CSSProperties = {
     backgroundColor: 'rgba(13,19,35,0.8)',
     border: '0.5px solid rgba(255,255,255,0.1)',
@@ -78,7 +93,6 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
   return (
     <SlideOver open={open} onClose={onClose} title={task.taskId}>
       <div className="p-6 space-y-5">
-        {/* Status + Priority badges */}
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant={priorityBadge[task.priority]}>{task.priority}</Badge>
           <Badge variant="muted">{task.status}</Badge>
@@ -88,7 +102,6 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
           {task.source === 'hermes_auto' && <Badge variant="blue">AUTO</Badge>}
         </div>
 
-        {/* Title */}
         <div>
           <label style={labelStyle}>Title</label>
           <input
@@ -100,7 +113,6 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
           />
         </div>
 
-        {/* Description */}
         <div>
           <label style={labelStyle}>Description</label>
           <textarea
@@ -112,7 +124,6 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
           />
         </div>
 
-        {/* Status */}
         <div>
           <label style={labelStyle}>Status</label>
           <select
@@ -126,7 +137,6 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
           </select>
         </div>
 
-        {/* Priority + Assignee row */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label style={labelStyle}>Priority</label>
@@ -154,7 +164,6 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
           </div>
         </div>
 
-        {/* Tags */}
         <div>
           <label style={labelStyle}>Tags (comma-separated)</label>
           <input
@@ -166,12 +175,11 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
           />
         </div>
 
-        {/* Hermes Notes (read only if from hermes) */}
         {task.hermesNotes && (
           <div>
             <label style={labelStyle}>Hermes Notes</label>
             <div
-              className="rounded p-3 text-[12px] leading-relaxed"
+              className="rounded p-3 text-[12px] leading-relaxed whitespace-pre-wrap"
               style={{
                 backgroundColor: 'rgba(60,215,255,0.05)',
                 border: '0.5px solid rgba(60,215,255,0.2)',
@@ -184,7 +192,6 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
           </div>
         )}
 
-        {/* Metadata */}
         <div className="space-y-1 pt-2" style={{ borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
           <div className="flex justify-between text-[10px] font-mono" style={{ color: '#859398' }}>
             <span>Created</span>
@@ -200,37 +207,59 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete }:
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-3 pt-2">
+        <div className="space-y-3 pt-2">
           <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 py-2 rounded text-[11px] font-bold uppercase tracking-widest transition-opacity duration-100"
+            onClick={handleExecute}
+            disabled={executing || task.status === 'done'}
+            className="w-full py-2.5 rounded text-[11px] font-bold uppercase tracking-widest transition-all duration-100 flex items-center justify-center gap-2"
             style={{
-              background: 'linear-gradient(135deg,#3cd7ff,#5df6e0)',
-              color: '#001f27',
+              background: task.status === 'done'
+                ? 'rgba(133,147,152,0.08)'
+                : 'linear-gradient(135deg, rgba(60,215,255,0.18), rgba(93,246,224,0.18))',
+              color: task.status === 'done' ? '#859398' : '#5df6e0',
+              border: task.status === 'done'
+                ? '1px solid rgba(133,147,152,0.18)'
+                : '1px solid rgba(93,246,224,0.24)',
               fontFamily: 'var(--font-jetbrains-mono)',
-              opacity: saving ? 0.6 : 1,
-              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: executing ? 0.7 : 1,
+              cursor: executing || task.status === 'done' ? 'not-allowed' : 'pointer',
             }}
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {executing ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+            {task.status === 'done' ? 'Task Complete' : executing ? 'Launching Hermes...' : 'Carry Out with Hermes'}
           </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="px-4 py-2 rounded text-[11px] font-bold uppercase tracking-widest transition-all duration-100"
-            style={{
-              backgroundColor: 'rgba(255,180,171,0.1)',
-              color: '#ffb4ab',
-              border: '0.5px solid rgba(255,180,171,0.25)',
-              fontFamily: 'var(--font-jetbrains-mono)',
-              opacity: deleting ? 0.6 : 1,
-              cursor: deleting ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {deleting ? '...' : 'Delete'}
-          </button>
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 py-2 rounded text-[11px] font-bold uppercase tracking-widest transition-opacity duration-100"
+              style={{
+                background: 'linear-gradient(135deg,#3cd7ff,#5df6e0)',
+                color: '#001f27',
+                fontFamily: 'var(--font-jetbrains-mono)',
+                opacity: saving ? 0.6 : 1,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-4 py-2 rounded text-[11px] font-bold uppercase tracking-widest transition-all duration-100"
+              style={{
+                backgroundColor: 'rgba(255,180,171,0.1)',
+                color: '#ffb4ab',
+                border: '0.5px solid rgba(255,180,171,0.25)',
+                fontFamily: 'var(--font-jetbrains-mono)',
+                opacity: deleting ? 0.6 : 1,
+                cursor: deleting ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {deleting ? '...' : 'Delete'}
+            </button>
+          </div>
         </div>
       </div>
     </SlideOver>

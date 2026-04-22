@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   DndContext,
   DragEndEvent,
@@ -32,6 +33,7 @@ const COLUMNS: { status: TaskStatus; label: string; accentColor: string }[] = [
 
 export default function KanbanBoard({ initialTasks, onRegisterAddTask }: KanbanBoardProps) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const router = useRouter()
 
   useEffect(() => {
     if (onRegisterAddTask) {
@@ -125,6 +127,23 @@ export default function KanbanBoard({ initialTasks, onRegisterAddTask }: KanbanB
     setTasks((prev) => prev.filter((t) => t.taskId !== taskId))
   }
 
+  const handleExecute = async (task: Task) => {
+    const res = await fetch(`/api/tasks/${task.taskId}/execute`, { method: 'POST' })
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to launch Hermes')
+    }
+
+    if (data.task) {
+      setTasks((prev) => prev.map((t) => (t.taskId === task.taskId ? data.task : t)))
+      setSelectedTask(data.task)
+    }
+
+    const prompt = encodeURIComponent(data.prompt || '')
+    router.push(`/chat?executeTask=${encodeURIComponent(task.taskId)}&prompt=${prompt}`)
+  }
+
   return (
     <>
       <DndContext
@@ -161,6 +180,7 @@ export default function KanbanBoard({ initialTasks, onRegisterAddTask }: KanbanB
         onClose={() => setSlideOverOpen(false)}
         onSave={handleSave}
         onDelete={handleDelete}
+        onExecute={handleExecute}
       />
     </>
   )
