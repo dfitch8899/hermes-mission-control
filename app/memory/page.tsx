@@ -123,7 +123,7 @@ export default function MemoryPage() {
             onMouseEnter={e => { if (!syncing) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(93,246,224,0.14)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = syncing ? 'rgba(93,246,224,0.05)' : 'rgba(93,246,224,0.08)' }}
           >
-            <span style={{ display: 'inline-block', animation: syncing ? 'spin 1s linear infinite' : 'none' }}>
+            <span style={{ display: 'inline-block', transition: 'transform 0.3s', transform: syncing ? 'rotate(360deg)' : 'rotate(0deg)' }}>
               ↻
             </span>
             {syncing ? 'Syncing...' : 'Sync from Hermes'}
@@ -139,9 +139,6 @@ export default function MemoryPage() {
         )}
       </div>
 
-      <style jsx>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   )
 }
