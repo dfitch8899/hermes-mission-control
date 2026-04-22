@@ -35,6 +35,8 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete, o
 
   if (!task) return null
 
+  const executeDisabled = executing || task.status === 'done' || task.status === 'in_progress'
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -210,23 +212,29 @@ export default function TaskSlideOver({ task, open, onClose, onSave, onDelete, o
         <div className="space-y-3 pt-2">
           <button
             onClick={handleExecute}
-            disabled={executing || task.status === 'done'}
+            disabled={executeDisabled}
             className="w-full py-2.5 rounded text-[11px] font-bold uppercase tracking-widest transition-all duration-100 flex items-center justify-center gap-2"
             style={{
-              background: task.status === 'done'
+              background: executeDisabled
                 ? 'rgba(133,147,152,0.08)'
                 : 'linear-gradient(135deg, rgba(60,215,255,0.18), rgba(93,246,224,0.18))',
-              color: task.status === 'done' ? '#859398' : '#5df6e0',
-              border: task.status === 'done'
+              color: executeDisabled ? '#859398' : '#5df6e0',
+              border: executeDisabled
                 ? '1px solid rgba(133,147,152,0.18)'
                 : '1px solid rgba(93,246,224,0.24)',
               fontFamily: 'var(--font-jetbrains-mono)',
               opacity: executing ? 0.7 : 1,
-              cursor: executing || task.status === 'done' ? 'not-allowed' : 'pointer',
+              cursor: executeDisabled ? 'not-allowed' : 'pointer',
             }}
           >
             {executing ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
-            {task.status === 'done' ? 'Task Complete' : executing ? 'Launching Hermes...' : 'Carry Out with Hermes'}
+            {task.status === 'done'
+              ? 'Task Complete'
+              : task.status === 'in_progress'
+                ? 'Task Already Running'
+                : executing
+                  ? 'Launching Hermes...'
+                  : 'Carry Out with Hermes'}
           </button>
 
           <div className="flex gap-3">

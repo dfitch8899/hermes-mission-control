@@ -30,6 +30,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Completed tasks cannot be executed again.' }, { status: 400 })
     }
 
+    if (task.status === 'in_progress') {
+      return NextResponse.json({ error: 'This task is already in progress.' }, { status: 400 })
+    }
+
     const now = new Date().toISOString()
     const nextTask: Task = {
       ...task,
@@ -68,6 +72,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
     console.error('[api/tasks/[id]/execute POST]', err)
 
     const fallbackTask = MOCK_TASKS.find((candidate) => candidate.taskId === params.id)
+    if (fallbackTask?.status === 'in_progress') {
+      return NextResponse.json({ error: 'This task is already in progress.' }, { status: 400 })
+    }
+
     if (fallbackTask && fallbackTask.status !== 'done') {
       const now = new Date().toISOString()
       const updatedTask: Task = {
