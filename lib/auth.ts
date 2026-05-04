@@ -1,6 +1,6 @@
 import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
-import { OAuthConfig, OAuthUserConfig } from 'next-auth/providers'
+import type { OAuthConfig, OAuthUserConfig } from 'next-auth/providers/oauth'
 import { getServerSession } from 'next-auth/next'
 
 const ALLOWED_DOMAINS = ['flashai.us', 'aiowl.org']
@@ -19,7 +19,7 @@ function OpenAIProvider(options: OAuthUserConfig<Record<string, unknown>>): OAut
     },
     idToken: true,
     checks: ['pkce', 'state'],
-    profile(profile) {
+    profile(profile: Record<string, unknown>) {
       return {
         id: profile.sub as string,
         name: profile.name as string ?? profile.email as string,

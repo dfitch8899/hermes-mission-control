@@ -1,12 +1,11 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
+import { ddb, TABLES, PutCommand, UpdateCommand } from '@/lib/dynamodb'
+import { postToSlack } from '@/lib/slack'
 
-const BOT_TOKEN      = process.env.SLACK_BOT_TOKEN!
-const USER_TOKEN     = process.env.SLACK_USER_TOKEN!
-const CHANNEL_ID     = process.env.HERMES_SLACK_CHANNEL_ID!
-const HERMES_BOT_ID  = process.env.HERMES_SLACK_BOT_ID!
-const HERMES_USER_ID = process.env.HERMES_SLACK_USER_ID!
+const BOT_TOKEN     = process.env.SLACK_BOT_TOKEN!
+const HERMES_BOT_ID = process.env.HERMES_SLACK_BOT_ID!
 
 const POLL_INTERVAL_MS = 1500
 const POLL_TIMEOUT_MS  = 120_000  // 2 min — enough time to approve a permission prompt
@@ -25,6 +24,47 @@ export interface PermissionRequest {
   command: string
   reason: string
 }
+
+// ─── DynamoDB helpers ──────────────────────────────────────────────────────
+
+/** Create a new chat record and return its chatId */
+async function createChatRecord(firstMessage: string, agentId?: string): Promise<string> {
+  const now    = new Date().toISOString()
+  const chatId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  const title  = firstMessage.slice(0, 80) + (firstMessage.length > 80 ? '…' : '')
+  const preview = firstMessage.slice(0, 120)
+
+  await ddb.send(new PutCommand({
+    TableName: TABLES.chats,
+    Item: { pk: 'CHATLIST', sk: `CHAT#${chatId}`, chatId, title, preview, createdAt: now, updatedAt: now, agentId: agentId ?? 'general' },
+  }))
+  return chatId
+}
+
+/** Append a message to a chat */
+async function saveMessageRecord(chatId: string, role: 'user' | 'assistant', content: string): Promise<void> {
+  const now     = new Date().toISOString()
+  const msgId   = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  const sk      = `MSG#${now}#${msgId}`
+
+  await ddb.send(new PutCommand({
+    TableName: TABLES.chats,
+    Item: { pk: `CHAT#${chatId}`, sk, messageId: msgId, role, content, timestamp: now },
+  }))
+}
+
+/** Update updatedAt and preview for the CHATLIST entry */
+async function updateChatRecord(chatId: string, preview: string): Promise<void> {
+  const now = new Date().toISOString()
+  await ddb.send(new UpdateCommand({
+    TableName: TABLES.chats,
+    Key: { pk: 'CHATLIST', sk: `CHAT#${chatId}` },
+    UpdateExpression: 'SET updatedAt = :now, preview = :preview',
+    ExpressionAttributeValues: { ':now': now, ':preview': preview.slice(0, 120) },
+  }))
+}
+
+// ─── Slack helpers ─────────────────────────────────────────────────────────
 
 function isPermissionRequest(msg: HermesMsg): boolean {
   return (
@@ -49,17 +89,6 @@ function extractPermissionRequest(msg: HermesMsg, channel: string): PermissionRe
   return { ts: msg.ts, channel, command, reason }
 }
 
-async function postToSlack(text: string, senderName: string): Promise<{ ts: string; channel: string }> {
-  const formatted = `<@${HERMES_USER_ID}> [Mission Control${senderName ? ` – ${senderName}` : ''}] ${text}`
-  const res = await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${USER_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: CHANNEL_ID, text: formatted, as_user: true }),
-  })
-  const data = await res.json()
-  if (!data.ok) throw new Error(`Slack post failed: ${data.error}`)
-  return { ts: data.ts, channel: data.channel }
-}
 
 async function getHermesMessages(channel: string, parentTs: string): Promise<HermesMsg[]> {
   const [threadRes, historyRes] = await Promise.all([
@@ -87,10 +116,6 @@ async function getHermesMessages(channel: string, parentTs: string): Promise<Her
     .sort((a, b) => parseFloat(a.ts) - parseFloat(b.ts))
 }
 
-/**
- * Build a single text blob from all normal (non-permission) Hermes messages.
- * Handles Hermes editing a single message OR posting multiple messages.
- */
 function buildFullText(msgs: HermesMsg[]): string {
   return msgs
     .filter(m => !isPermissionRequest(m))
@@ -116,7 +141,6 @@ async function pollForReply(
     const msgs = await getHermesMessages(channel, parentTs)
     if (msgs.length === 0) continue
 
-    // Emit newly-seen permission requests
     for (const msg of msgs) {
       if (isPermissionRequest(msg) && !seenPermTs.has(msg.ts)) {
         seenPermTs.add(msg.ts)
@@ -124,17 +148,14 @@ async function pollForReply(
       }
     }
 
-    // Build the complete text from all normal messages (handles single editable msg + multi-msg)
     const fullText = buildFullText(msgs)
     if (!fullText) continue
 
     if (fullText !== lastFullText) {
-      // Hermes has new or updated content — reset settle timer and stream the update
       lastFullText = fullText
       lastNewAt    = Date.now()
       onTextUpdate(fullText)
     } else if (lastNewAt > 0 && Date.now() - lastNewAt >= SETTLE_AFTER_MS) {
-      // Content hasn't changed in SETTLE_AFTER_MS — Hermes is done
       return lastFullText
     }
   }
@@ -142,18 +163,25 @@ async function pollForReply(
   return lastFullText || null
 }
 
+// ─── Route handler ─────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
-  const { messages } = await req.json()
+  const body = await req.json()
+  const { messages, chatId: incomingChatId, agentId } = body as {
+    messages: Array<{ role: string; content: string }>
+    chatId?:  string | null
+    agentId?: string | null
+  }
 
   const session    = await getServerSession(authOptions)
   const senderName = session?.user?.name ?? session?.user?.email ?? ''
 
-  const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === 'user')
+  const lastUser = [...messages].reverse().find((m) => m.role === 'user')
   if (!lastUser) return new Response(JSON.stringify({ error: 'No user message' }), { status: 400 })
 
   const userText = typeof lastUser.content === 'string'
     ? lastUser.content
-    : lastUser.content?.map((b: { text?: string }) => b.text).join(' ')
+    : (lastUser.content as Array<{ text?: string }>)?.map(b => b.text).join(' ')
 
   const encoder = new TextEncoder()
 
@@ -162,26 +190,38 @@ export async function POST(req: NextRequest) {
       const send = (obj: object) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
 
+      let chatId = incomingChatId ?? null
+
       try {
+        // Ensure a chat record exists ─────────────────────────────────────
+        if (!chatId) {
+          chatId = await createChatRecord(userText, agentId ?? 'general').catch(() => null)
+          if (chatId) send({ type: 'chat_meta', chatId })
+        }
+
+        // Persist user message ────────────────────────────────────────────
+        if (chatId) {
+          await saveMessageRecord(chatId, 'user', userText).catch(() => {/* non-fatal */})
+        }
+
+        // Stream Hermes reply ─────────────────────────────────────────────
         send({ type: 'status', message: 'Sending to Hermes...' })
-        const post = await postToSlack(userText, senderName)
+        const post = await postToSlack(userText, senderName, agentId ?? 'general')
 
         send({ type: 'status', message: 'Waiting for Hermes...' })
 
         const reply = await pollForReply(
           post.channel,
           post.ts,
-          // permission_request callback
           (permReq) => {
             send({
-              type: 'permission_request',
+              type:    'permission_request',
               ts:      permReq.ts,
               channel: permReq.channel,
               command: permReq.command,
               reason:  permReq.reason,
             })
           },
-          // text update callback — stream the full current text so the UI can replace in real-time
           (fullText) => {
             send({ type: 'text_replace', text: fullText })
           },
@@ -192,6 +232,12 @@ export async function POST(req: NextRequest) {
             type: 'text_replace',
             text: "Hermes didn't respond within 2 minutes — it may still be processing. Check Slack for the reply.",
           })
+        }
+
+        // Persist assistant reply ─────────────────────────────────────────
+        if (chatId && reply) {
+          await saveMessageRecord(chatId, 'assistant', reply).catch(() => {/* non-fatal */})
+          await updateChatRecord(chatId, reply).catch(() => {/* non-fatal */})
         }
 
         send({ type: 'done' })

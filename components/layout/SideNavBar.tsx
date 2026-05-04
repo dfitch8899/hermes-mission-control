@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, CheckSquare, Brain, Calendar, Terminal, MessageSquare } from 'lucide-react'
+import { Home, CheckSquare, Brain, Calendar, Terminal, MessageSquare, Bot, Kanban } from 'lucide-react'
 
 const navItems = [
   { path: '/', icon: Home, label: 'Overview' },
-  { path: '/tasks', icon: CheckSquare, label: 'Tasks' },
-  { path: '/memory', icon: Brain, label: 'Memory' },
   { path: '/chat', icon: MessageSquare, label: 'Chat' },
+  { path: '/agents', icon: Bot, label: 'Agents' },
+  { path: '/kanban', icon: Kanban, label: 'Kanban' },
+  { path: '/memory', icon: Brain, label: 'Memory' },
+  { path: '/tasks', icon: CheckSquare, label: 'Tasks' },
   { path: '/calendar', icon: Calendar, label: 'Calendar' },
   { path: '/terminal', icon: Terminal, label: 'Terminal' },
 ]
