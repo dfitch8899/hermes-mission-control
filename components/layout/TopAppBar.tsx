@@ -1,7 +1,113 @@
 'use client'
 
-import { Bell, Search } from 'lucide-react'
-import { useState } from 'react'
+import { Bell, Search, ChevronDown, Cpu } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+
+// ── Model Picker ────────────────────────────────────────────────────────────
+
+interface ModelOption { value: string; label: string; description: string }
+
+function ModelPicker() {
+  const [model,   setModel]   = useState<string>('gpt-5.4')
+  const [options, setOptions] = useState<ModelOption[]>([])
+  const [open,    setOpen]    = useState(false)
+  const [saving,  setSaving]  = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    fetch('/api/hermes/model')
+      .then(r => r.json())
+      .then(d => {
+        if (d.model)   setModel(d.model)
+        if (d.options) setOptions(d.options)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const select = async (value: string) => {
+    if (value === model || saving) return
+    setSaving(true)
+    setOpen(false)
+    try {
+      await fetch('/api/hermes/model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: value }),
+      })
+      setModel(value)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const label = options.find(o => o.value === model)?.label ?? model
+
+  return (
+    <div ref={ref} className="relative hidden sm:block">
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[10px] font-mono transition-all"
+        style={{
+          background: open ? 'rgba(60,215,255,0.08)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${open ? 'rgba(60,215,255,0.3)' : 'rgba(255,255,255,0.08)'}`,
+          color: saving ? '#859398' : '#3cd7ff',
+        }}
+      >
+        <Cpu size={11} />
+        <span>{saving ? 'switching…' : label}</span>
+        <ChevronDown size={10} style={{ opacity: 0.6, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full mt-1.5 right-0 z-50 rounded-xl overflow-hidden py-1"
+          style={{
+            minWidth: 220,
+            background: '#0d1323',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+          }}
+        >
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => void select(opt.value)}
+              className="w-full flex flex-col px-3 py-2 text-left transition-colors"
+              style={{
+                background: opt.value === model ? 'rgba(60,215,255,0.08)' : 'transparent',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = opt.value === model ? 'rgba(60,215,255,0.08)' : 'transparent' }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono font-medium" style={{ color: opt.value === model ? '#3cd7ff' : '#dde2f9' }}>
+                  {opt.label}
+                </span>
+                {opt.value === model && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(60,215,255,0.15)', color: '#3cd7ff' }}>
+                    active
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] font-mono" style={{ color: '#859398' }}>{opt.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── TopAppBar ───────────────────────────────────────────────────────────────
 
 interface TopAppBarProps {
   breadcrumb: string[]
@@ -86,8 +192,11 @@ export default function TopAppBar({ breadcrumb }: TopAppBarProps) {
         </div>
       </div>
 
-      {/* Right: status + bell + avatar */}
-      <div className="flex items-center gap-4">
+      {/* Right: model picker + status + bell + avatar */}
+      <div className="flex items-center gap-3">
+        {/* Model picker */}
+        <ModelPicker />
+
         {/* Status chip */}
         <div
           className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[10px] uppercase tracking-widest font-mono"
