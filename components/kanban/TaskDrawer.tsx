@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, MessageSquare, Send, Archive } from 'lucide-react'
+import { X, MessageSquare, Send, Archive, Bot } from 'lucide-react'
 import type { KanbanTask, KanbanComment } from '@/types/kanban'
 import type { Agent } from '@/types/agent'
 
@@ -28,21 +28,22 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 interface Props {
-  task:     KanbanTask
-  onClose:  () => void
-  onUpdate: (taskId: string, patch: Record<string, unknown>) => Promise<void>
+  task:            KanbanTask
+  onClose:         () => void
+  onUpdate:        (taskId: string, patch: Record<string, unknown>) => Promise<void>
+  onLaunchInChat?: (task: KanbanTask) => void
 }
 
-export default function TaskDrawer({ task, onClose, onUpdate }: Props) {
-  const [comments,     setComments]     = useState<KanbanComment[]>([])
-  const [commentText,  setCommentText]  = useState('')
+export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: Props) {
+  const [comments,       setComments]       = useState<KanbanComment[]>([])
+  const [commentText,    setCommentText]    = useState('')
   const [sendingComment, setSendingComment] = useState(false)
-  const [agents,       setAgents]       = useState<Agent[]>([])
+  const [agents,         setAgents]         = useState<Agent[]>([])
 
-  // Fetch task detail (with comments) and agent list
   useEffect(() => {
+    const boardParam = task.boardSlug ? `?board=${encodeURIComponent(task.boardSlug)}` : ''
     Promise.all([
-      fetch(`/api/kanban/${task.taskId}`).then(r => r.json()),
+      fetch(`/api/kanban/${task.taskId}${boardParam}`).then(r => r.json()),
       fetch('/api/agents').then(r => r.json()),
     ]).then(([taskData, agentData]) => {
       if (taskData.comments) setComments(taskData.comments)
@@ -67,7 +68,6 @@ export default function TaskDrawer({ task, onClose, onUpdate }: Props) {
         body: JSON.stringify({ text }),
       })
       setCommentText('')
-      // Optimistic local update
       setComments(prev => [...prev, {
         commentId: Date.now().toString(),
         body: text,
@@ -79,9 +79,9 @@ export default function TaskDrawer({ task, onClose, onUpdate }: Props) {
     }
   }
 
-  const agentColor = AGENT_COLORS[task.assignee] ?? '#3cd7ff'
-  const agentIcon  = AGENT_ICONS[task.assignee]  ?? '✨'
-  const statusColor = STATUS_COLORS[task.status] ?? '#859398'
+  const agentColor  = AGENT_COLORS[task.assignee] ?? '#3cd7ff'
+  const agentIcon   = AGENT_ICONS[task.assignee]  ?? '✨'
+  const statusColor = STATUS_COLORS[task.status]  ?? '#859398'
 
   const inputBase = {
     background: 'rgba(255,255,255,0.04)',
@@ -92,6 +92,11 @@ export default function TaskDrawer({ task, onClose, onUpdate }: Props) {
     padding: '8px 12px',
     outline: 'none',
   }
+
+  const sectionLabel = (
+    <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }} />
+  )
+  void sectionLabel // suppress unused
 
   return (
     <>
@@ -106,7 +111,7 @@ export default function TaskDrawer({ task, onClose, onUpdate }: Props) {
       <div
         className="fixed right-0 top-0 bottom-0 z-50 flex flex-col overflow-hidden"
         style={{
-          width: 420,
+          width: 440,
           background: '#0d1323',
           borderLeft: '1px solid rgba(255,255,255,0.09)',
           boxShadow: '-16px 0 60px rgba(0,0,0,0.5)',
@@ -131,6 +136,17 @@ export default function TaskDrawer({ task, onClose, onUpdate }: Props) {
               >
                 {agentIcon} {task.assignee}
               </span>
+              {task.priority !== 'normal' && (
+                <span
+                  className="text-[10px] font-mono px-2 py-0.5 rounded-full capitalize"
+                  style={{
+                    background: task.priority === 'critical' ? 'rgba(239,68,68,0.12)' : task.priority === 'high' ? 'rgba(249,115,22,0.12)' : 'rgba(133,147,152,0.12)',
+                    color:      task.priority === 'critical' ? '#ef4444' : task.priority === 'high' ? '#f97316' : '#859398',
+                  }}
+                >
+                  {task.priority}
+                </span>
+              )}
             </div>
             <h2 className="text-sm font-semibold leading-snug" style={{ color: '#dde2f9' }}>
               {task.title}
@@ -151,6 +167,49 @@ export default function TaskDrawer({ task, onClose, onUpdate }: Props) {
               <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'rgba(221,226,249,0.7)' }}>
                 {task.body}
               </p>
+            </div>
+          )}
+
+          {/* Tags */}
+          {task.tags && task.tags.length > 0 && (
+            <div>
+              <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }}>Tags</div>
+              <div className="flex flex-wrap gap-1.5">
+                {task.tags.map(tag => (
+                  <span
+                    key={tag}
+                    className="text-[10px] px-2 py-0.5 rounded-md font-mono"
+                    style={{
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#859398',
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Launch with Hermes */}
+          {onLaunchInChat && task.status !== 'done' && (
+            <div>
+              <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }}>Launch</div>
+              <button
+                onClick={() => onLaunchInChat(task)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-mono font-semibold transition-all"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(60,215,255,0.15), rgba(93,246,224,0.15))',
+                  border: '1px solid rgba(93,246,224,0.3)',
+                  color: '#5df6e0',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(60,215,255,0.25), rgba(93,246,224,0.25))' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(60,215,255,0.15), rgba(93,246,224,0.15))' }}
+              >
+                <Bot size={14} />
+                Carry Out with Hermes
+              </button>
             </div>
           )}
 
@@ -230,10 +289,22 @@ export default function TaskDrawer({ task, onClose, onUpdate }: Props) {
                 <span style={{ color: '#dde2f9' }}>{task.workspaceType}</span>
               </div>
             )}
+            {task.boardSlug && (
+              <div className="flex justify-between">
+                <span style={{ color: '#859398' }}>Board</span>
+                <span style={{ color: '#dde2f9' }}>{task.boardSlug}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span style={{ color: '#859398' }}>Created</span>
               <span style={{ color: '#dde2f9' }}>{new Date(task.createdAt).toLocaleDateString()}</span>
             </div>
+            {task.completedAt && (
+              <div className="flex justify-between">
+                <span style={{ color: '#859398' }}>Completed</span>
+                <span style={{ color: '#a78bfa' }}>{new Date(task.completedAt).toLocaleDateString()}</span>
+              </div>
+            )}
           </div>
 
           {/* Comments */}

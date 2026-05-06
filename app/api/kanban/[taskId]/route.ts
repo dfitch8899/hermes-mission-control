@@ -5,19 +5,21 @@ import { ddb, TABLES, GetCommand, QueryCommand } from '@/lib/dynamodb'
 import { postToSlack } from '@/lib/slack'
 import type { KanbanTask, KanbanComment } from '@/types/kanban'
 
-const BOARD = 'BOARD#default'
-
-/** GET /api/kanban/[taskId] — single task + comment thread */
+/** GET /api/kanban/[taskId] — single task + comment thread
+ *  ?board=<slug>  optional (default "default")
+ */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { taskId: string } },
 ) {
   const { taskId } = params
+  const board = new URL(req.url).searchParams.get('board') ?? 'default'
+  const boardPk = `BOARD#${board}`
   try {
     const [taskRes, commentsRes] = await Promise.all([
       ddb.send(new GetCommand({
         TableName: TABLES.kanban,
-        Key: { pk: BOARD, sk: `TASK#${taskId}` },
+        Key: { pk: boardPk, sk: `TASK#${taskId}` },
       })),
       ddb.send(new QueryCommand({
         TableName: TABLES.kanban,

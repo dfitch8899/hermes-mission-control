@@ -13,6 +13,7 @@ interface Props {
     priority:       string
     workspaceType:  string
     tenant:         string
+    tags:           string[]
   }) => Promise<void>
 }
 
@@ -23,12 +24,13 @@ export default function NewTaskModal({ onClose, onCreate }: Props) {
   const [priority,      setPriority]       = useState('normal')
   const [workspaceType, setWorkspaceType]  = useState('scratch')
   const [tenant,        setTenant]         = useState('')
+  const [tagsRaw,       setTagsRaw]        = useState('')
   const [showAdvanced,  setShowAdvanced]   = useState(false)
   const [loading,       setLoading]        = useState(false)
   const [agents,        setAgents]         = useState<Agent[]>([])
 
   useEffect(() => {
-    fetch('/api/agents').then(r => r.json()).then(d => setAgents(d.agents ?? []))
+    fetch('/api/agents').then(r => r.json()).then(d => setAgents(d.agents ?? [])).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -40,8 +42,9 @@ export default function NewTaskModal({ onClose, onCreate }: Props) {
   const submit = async () => {
     if (!title.trim() || loading) return
     setLoading(true)
+    const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
     try {
-      await onCreate({ title: title.trim(), description, assignee, priority, workspaceType, tenant })
+      await onCreate({ title: title.trim(), description, assignee, priority, workspaceType, tenant, tags })
       onClose()
     } finally {
       setLoading(false)
@@ -108,6 +111,8 @@ export default function NewTaskModal({ onClose, onCreate }: Props) {
               onKeyDown={e => { if (e.key === 'Enter') void submit() }}
               placeholder="What needs to be done?"
               style={inputStyle}
+              onFocus={e => { e.target.style.borderColor = 'rgba(60,215,255,0.4)' }}
+              onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
             />
           </div>
 
@@ -120,6 +125,8 @@ export default function NewTaskModal({ onClose, onCreate }: Props) {
               placeholder="Optional details..."
               rows={3}
               style={{ ...inputStyle, resize: 'vertical' }}
+              onFocus={e => { e.target.style.borderColor = 'rgba(60,215,255,0.4)' }}
+              onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
             />
           </div>
 
@@ -143,15 +150,21 @@ export default function NewTaskModal({ onClose, onCreate }: Props) {
           <div>
             <label style={labelStyle}>Priority</label>
             <div className="flex gap-2">
-              {(['low', 'normal', 'high'] as const).map(p => (
+              {(['low', 'normal', 'high', 'critical'] as const).map(p => (
                 <button
                   key={p}
                   onClick={() => setPriority(p)}
                   className="flex-1 py-2 rounded-lg text-[11px] font-mono font-medium transition-all capitalize"
                   style={{
-                    background: priority === p ? 'rgba(60,215,255,0.12)' : 'rgba(255,255,255,0.04)',
-                    border: priority === p ? '1px solid rgba(60,215,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
-                    color: priority === p ? '#3cd7ff' : '#859398',
+                    background: priority === p
+                      ? p === 'critical' ? 'rgba(239,68,68,0.15)' : 'rgba(60,215,255,0.12)'
+                      : 'rgba(255,255,255,0.04)',
+                    border: priority === p
+                      ? p === 'critical' ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(60,215,255,0.35)'
+                      : '1px solid rgba(255,255,255,0.08)',
+                    color: priority === p
+                      ? p === 'critical' ? '#ef4444' : '#3cd7ff'
+                      : '#859398',
                   }}
                 >
                   {p}
@@ -173,6 +186,17 @@ export default function NewTaskModal({ onClose, onCreate }: Props) {
           {showAdvanced && (
             <>
               <div>
+                <label style={labelStyle}>Tags (comma-separated)</label>
+                <input
+                  value={tagsRaw}
+                  onChange={e => setTagsRaw(e.target.value)}
+                  placeholder="e.g. backend, performance, urgent"
+                  style={inputStyle}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(60,215,255,0.4)' }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
+                />
+              </div>
+              <div>
                 <label style={labelStyle}>Workspace type</label>
                 <select
                   value={workspaceType}
@@ -191,6 +215,8 @@ export default function NewTaskModal({ onClose, onCreate }: Props) {
                   onChange={e => setTenant(e.target.value)}
                   placeholder="Optional tenant tag"
                   style={inputStyle}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(60,215,255,0.4)' }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
                 />
               </div>
             </>

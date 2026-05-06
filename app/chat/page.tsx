@@ -4,7 +4,7 @@ import { Suspense, useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import TopAppBar from '@/components/layout/TopAppBar'
 import AgentPickerModal from '@/components/agents/AgentPickerModal'
-import { ArrowUp, AlertTriangle, CheckCircle, XCircle, Plus, Trash2 } from 'lucide-react'
+import { ArrowUp, AlertTriangle, CheckCircle, XCircle, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import type { Agent } from '@/types/agent'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -87,6 +87,186 @@ function ToolChip({ tc }: { tc: ToolCallInfo }) {
     >
       <span style={{ fontSize: 11 }}>⚡</span>
       {formatToolChip(tc)}
+    </div>
+  )
+}
+
+// ─── Orchestrator rendering ─────────────────────────────────────────────────
+
+interface OrchestratorStep {
+  id: number
+  total: number
+  goal: string
+  status: 'running' | 'done' | 'failed'
+  error?: string
+}
+
+interface OrchestratorPlan {
+  totalSteps: number
+  goals: string[]
+  steps: OrchestratorStep[]
+}
+
+function parseOrchestratorContent(content: string): { plan: OrchestratorPlan | null; finalText: string } {
+  if (!content.includes('📋 Plan:')) {
+    return { plan: null, finalText: content }
+  }
+
+  // Find where the orchestrator section starts
+  const planIdx = content.indexOf('📋 Plan:')
+
+  // The preamble before the plan (usually empty, but keep in case)
+  const preamble = content.substring(0, planIdx)
+
+  // Split orchestrator section from final text at the last \n\n before any non-marker line
+  const afterPlan = content.substring(planIdx)
+  const doubleNl = afterPlan.indexOf('\n\n')
+  let orchSection = afterPlan
+  let finalText   = ''
+
+  if (doubleNl !== -1) {
+    orchSection = afterPlan.substring(0, doubleNl)
+    finalText   = afterPlan.substring(doubleNl + 2)
+  }
+
+  // Parse plan header: "📋 Plan: N step(s)"
+  const planMatch = orchSection.match(/📋 Plan:\s*(\d+)\s*steps?/)
+  if (!planMatch) return { plan: null, finalText: content }
+  const totalSteps = parseInt(planMatch[1], 10)
+
+  // Parse goal list lines:  "  1. goal"
+  const goals: string[] = []
+  for (const line of orchSection.split('\n')) {
+    const m = line.match(/^\s{1,4}(\d+)\.\s+(.+)$/)
+    if (m) goals.push(m[2].trim())
+  }
+
+  // Parse steps
+  const stepMap: Record<number, OrchestratorStep> = {}
+  const startRe = /⚙️ Step\s+(\d+)\/(\d+):\s+(.+)/
+  const doneRe  = /✅ Step\s+(\d+)\/(\d+)\s+done/
+  const failRe  = /⚠️ Step\s+(\d+)\/(\d+)\s+failed:\s+(.+)/
+
+  for (const line of orchSection.split('\n')) {
+    const sm = line.match(startRe)
+    if (sm) {
+      const id = parseInt(sm[1], 10)
+      stepMap[id] = { id, total: parseInt(sm[2], 10), goal: sm[3].trim(), status: 'running' }
+    }
+    const dm = line.match(doneRe)
+    if (dm) {
+      const id = parseInt(dm[1], 10)
+      if (stepMap[id]) stepMap[id].status = 'done'
+    }
+    const fm = line.match(failRe)
+    if (fm) {
+      const id = parseInt(fm[1], 10)
+      if (stepMap[id]) { stepMap[id].status = 'failed'; stepMap[id].error = fm[3].trim() }
+    }
+  }
+
+  const steps = Object.values(stepMap).sort((a, b) => a.id - b.id)
+  const plan: OrchestratorPlan = { totalSteps, goals, steps }
+
+  // If there's preamble, prepend it to finalText
+  const combinedFinal = preamble ? preamble.trim() + (finalText ? '\n\n' + finalText : '') : finalText
+  return { plan, finalText: combinedFinal }
+}
+
+function OrchestratorBlock({ plan }: { plan: OrchestratorPlan }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const doneCount = plan.steps.filter(s => s.status === 'done').length
+  const failCount = plan.steps.filter(s => s.status === 'failed').length
+  const allDone   = doneCount + failCount === plan.totalSteps && plan.totalSteps > 0
+
+  return (
+    <div className="mb-2" style={{ maxWidth: '80%' }}>
+      {/* Collapsible header */}
+      <button
+        onClick={() => setExpanded(p => !p)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-mono font-medium transition-all duration-150 w-full"
+        style={{
+          background: 'rgba(93,246,224,0.06)',
+          border: '1px solid rgba(93,246,224,0.18)',
+          color: '#5df6e0',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(93,246,224,0.1)' }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(93,246,224,0.06)' }}
+      >
+        {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+        <span style={{ fontSize: 12 }}>📋</span>
+        <span>
+          Orchestration plan — {plan.totalSteps} step{plan.totalSteps !== 1 ? 's' : ''}
+        </span>
+        {allDone && (
+          <span className="ml-auto" style={{ color: doneCount === plan.totalSteps ? '#5df6e0' : '#f97316' }}>
+            {failCount > 0 ? `${failCount} failed` : '✓ done'}
+          </span>
+        )}
+      </button>
+
+      {/* Expanded body */}
+      {expanded && (
+        <div
+          className="mt-1.5 rounded-xl overflow-hidden"
+          style={{
+            background: 'rgba(13,19,35,0.7)',
+            border: '1px solid rgba(93,246,224,0.1)',
+          }}
+        >
+          {/* Goals list */}
+          {plan.goals.length > 0 && (
+            <div className="px-3 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              {plan.goals.map((goal, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 py-0.5 text-[10px] font-mono"
+                  style={{ color: 'rgba(180,190,220,0.6)' }}
+                >
+                  <span style={{ color: '#5df6e0', opacity: 0.5, minWidth: 16 }}>{i + 1}.</span>
+                  <span>{goal}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Step chips */}
+          {plan.steps.length > 0 && (
+            <div className="px-3 py-2 flex flex-col gap-1">
+              {plan.steps.map(step => {
+                const statusColor =
+                  step.status === 'done'    ? '#5df6e0' :
+                  step.status === 'failed'  ? '#ff7070' :
+                  '#ffc83c'
+                const statusIcon =
+                  step.status === 'done'   ? '✅' :
+                  step.status === 'failed' ? '⚠️' :
+                  '⚙️'
+
+                return (
+                  <div
+                    key={step.id}
+                    className="flex items-start gap-2 text-[10px] font-mono py-0.5"
+                  >
+                    <span>{statusIcon}</span>
+                    <span style={{ color: statusColor, minWidth: 56 }}>
+                      Step {step.id}/{step.total}
+                    </span>
+                    <span style={{ color: 'rgba(180,190,220,0.7)', flex: 1 }}>
+                      {step.goal}
+                      {step.status === 'failed' && step.error && (
+                        <span style={{ color: '#ff9090', marginLeft: 4 }}>— {step.error}</span>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -224,6 +404,8 @@ function AssistantBubble({
   message: Message
   onPermissionDecision: (msgId: string, permTs: string, decision: 'approve' | 'deny') => void
 }) {
+  const { plan, finalText } = parseOrchestratorContent(message.content)
+
   return (
     <div className="flex items-start gap-3 mb-4 animate-fade-in-up">
       <div
@@ -242,6 +424,8 @@ function AssistantBubble({
             {message.toolCalls.map((tc, i) => <ToolChip key={i} tc={tc} />)}
           </div>
         )}
+        {/* Orchestrator plan block — rendered when markers are detected */}
+        {plan && <OrchestratorBlock plan={plan} />}
         {message.permissions && message.permissions.length > 0 && (
           <div className="mb-2">
             {message.permissions.map(perm => (
@@ -253,7 +437,7 @@ function AssistantBubble({
             ))}
           </div>
         )}
-        {message.content && (
+        {finalText && (
           <div
             className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed"
             style={{
@@ -266,7 +450,7 @@ function AssistantBubble({
               wordBreak: 'break-word',
             }}
           >
-            {message.content}
+            {finalText}
           </div>
         )}
       </div>

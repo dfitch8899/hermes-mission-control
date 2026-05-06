@@ -5,9 +5,9 @@ import TopAppBar from '@/components/layout/TopAppBar'
 import MetricCard from '@/components/overview/MetricCard'
 import ActivityFeed from '@/components/overview/ActivityFeed'
 import Badge from '@/components/ui/Badge'
-import { MOCK_TASKS, MOCK_MEMORIES, MOCK_CALENDAR_EVENTS } from '@/lib/mockData'
+import { MOCK_MEMORIES, MOCK_CALENDAR_EVENTS } from '@/lib/mockData'
 import { formatDistanceToNow } from 'date-fns'
-import type { Task } from '@/types/task'
+import type { KanbanTask } from '@/types/kanban'
 import type { Memory } from '@/types/memory'
 import type { CalendarEvent } from '@/types/calendar'
 
@@ -54,23 +54,23 @@ function UptimeDisplay() {
 const priorityBadge = {
   critical: 'red' as const,
   high: 'amber' as const,
-  medium: 'blue' as const,
+  normal: 'blue' as const,
   low: 'muted' as const,
 }
 
 export default function OverviewPage() {
-  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
+  const [tasks, setTasks] = useState<KanbanTask[]>([])
   const [memories, setMemories] = useState<Memory[]>(MOCK_MEMORIES)
   const [events, setEvents] = useState<CalendarEvent[]>(MOCK_CALENDAR_EVENTS)
 
   useEffect(() => {
-    fetch('/api/tasks').then(r => r.ok ? r.json() : null).then(d => { if (d?.tasks?.length) setTasks(d.tasks) }).catch(() => {})
+    fetch('/api/kanban').then(r => r.ok ? r.json() : null).then(d => { if (d?.tasks?.length) setTasks(d.tasks) }).catch(() => {})
     fetch('/api/memories').then(r => r.ok ? r.json() : null).then(d => { if (d?.memories?.length) setMemories(d.memories) }).catch(() => {})
     fetch('/api/calendar').then(r => r.ok ? r.json() : null).then(d => { if (d?.events?.length) setEvents(d.events) }).catch(() => {})
   }, [])
 
-  const inProgressTasks = useMemo(() => tasks.filter(t => t.status === 'in_progress'), [tasks])
-  const completedTasks = useMemo(() => tasks.filter(t => t.status === 'done'), [tasks])
+  const inProgressTasks = useMemo(() => tasks.filter(t => t.status === 'running'), [tasks])
+  const completedTasks  = useMemo(() => tasks.filter(t => t.status === 'done'), [tasks])
   const recentTasks = useMemo(() => [...tasks].sort((a, b) => {
     const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     return diff !== 0 ? diff : a.taskId.localeCompare(b.taskId)
@@ -194,7 +194,7 @@ export default function OverviewPage() {
             <div className="flex items-center justify-between mb-5">
               <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-outline">Recent Tasks</span>
               <a
-                href="/tasks"
+                href="/kanban"
                 className="text-[10px] font-mono uppercase tracking-widest transition-colors duration-200"
                 style={{ color: '#859398' }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = '#3cd7ff' }}
@@ -217,19 +217,21 @@ export default function OverviewPage() {
                     className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
                     style={{
                       backgroundColor:
-                        task.status === 'in_progress' ? '#3cd7ff'
-                        : task.status === 'done' ? '#5df6e0'
-                        : task.status === 'queued' ? '#b8c4ff'
+                        task.status === 'running'  ? '#4ade80'
+                        : task.status === 'done'   ? '#a78bfa'
+                        : task.status === 'ready'  ? '#5df6e0'
+                        : task.status === 'todo'   ? '#3cd7ff'
+                        : task.status === 'blocked'? '#f97316'
                         : '#859398',
-                      boxShadow: task.status === 'in_progress'
-                        ? '0 0 8px rgba(60, 215, 255, 0.5)'
+                      boxShadow: task.status === 'running'
+                        ? '0 0 8px rgba(74,222,128,0.5)'
                         : 'none',
                     }}
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-medium truncate text-on-surface">{task.title}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <Badge variant={priorityBadge[task.priority]}>{task.priority}</Badge>
+                      <Badge variant={priorityBadge[task.priority as keyof typeof priorityBadge] ?? 'muted'}>{task.priority}</Badge>
                       <span className="text-[10px] font-mono text-outline">
                         {formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}
                       </span>

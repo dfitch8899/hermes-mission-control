@@ -15,12 +15,14 @@ export interface KanbanTask {
   body:           string
   status:         KanbanStatus
   assignee:       string        // agentId
-  priority:       'low' | 'normal' | 'high'
+  priority:       'low' | 'normal' | 'high' | 'critical'
   tenant?:        string
   workspaceType?: string
+  tags?:          string[]
   parentIds:      string[]
   childIds:       string[]
   commentCount:   number
+  boardSlug?:     string
   createdAt:      string
   updatedAt:      string
   completedAt?:   string
@@ -34,7 +36,7 @@ export interface KanbanComment {
   ts:        string
 }
 
-export type KanbanEventKind = 'create' | 'move' | 'comment' | 'complete' | 'block' | 'unblock' | 'archive' | 'link'
+export type KanbanEventKind = 'create' | 'move' | 'update' | 'comment' | 'complete' | 'block' | 'unblock' | 'archive' | 'link'
 
 export interface KanbanEvent {
   eventId: string
@@ -43,4 +45,10 @@ export interface KanbanEvent {
   actor:   string
   payload: Record<string, unknown>
   ts:      string
+}
+
+export interface KanbanBoard {
+  slug:      string
+  name:      string
+  createdAt: string
 }

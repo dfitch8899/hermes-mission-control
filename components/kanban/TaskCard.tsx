@@ -15,7 +15,7 @@ const AGENT_ICONS: Record<string, string> = {
   marketing: '📢',
   research:  '🔬',
 }
-const PRIORITY_COLORS = { low: '#859398', normal: '#3cd7ff', high: '#f97316' }
+const PRIORITY_COLORS: Record<string, string> = { low: '#859398', normal: '#3cd7ff', high: '#f97316', critical: '#ef4444' }
 
 interface Props {
   task:        KanbanTask
