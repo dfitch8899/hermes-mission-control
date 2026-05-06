@@ -35,7 +35,10 @@ export default function MemoryPage() {
       const r = await fetch('/api/memories')
       if (!r.ok) return
       const d = await r.json()
-      if (d?.memories?.length) setMemories(d.memories)
+      // Always update state — even an empty result should clear stale mock data.
+      // Previously guarded by `.length` which silently skipped the update when
+      // DDB returned an empty array (e.g. mid-write during sync).
+      setMemories(Array.isArray(d.memories) ? d.memories : MOCK_MEMORIES)
     } catch {
       /* silent */
     }
@@ -62,14 +65,16 @@ export default function MemoryPage() {
       const r = await fetch('/api/hermes/sync', { method: 'POST' })
       const d = await r.json()
       if (d.lastSyncedAt) setSyncMeta(d)
-      // Re-fetch memories after sync
-      await fetchMemories()
+      // Give DDB ~1.5s to settle after the sync script finishes writing,
+      // then refresh both memories and the sync-status counts together.
+      await new Promise(res => setTimeout(res, 1500))
+      await Promise.all([fetchMemories(), fetchSyncMeta()])
     } catch {
       setSyncError('Sync failed — check that Hermes is online.')
     } finally {
       setSyncing(false)
     }
-  }, [fetchMemories])
+  }, [fetchMemories, fetchSyncMeta])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
