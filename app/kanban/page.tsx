@@ -94,22 +94,39 @@ export default function KanbanPage() {
 
   // ── Launch task in chat (and mark as running) ───────────────────────────
   const handleLaunchInChat = useCallback(async (task: KanbanTask) => {
+    const board = task.boardSlug ?? activeBoard
+
     // Optimistically move to "running"
     setTasks(prev => prev.map(t => t.taskId === task.taskId ? { ...t, status: 'running' } : t))
     setSelectedTask(null)
 
     // Persist the status change immediately
-    await fetch(`/api/kanban/${task.taskId}?board=${task.boardSlug ?? activeBoard}`, {
+    await fetch(`/api/kanban/${task.taskId}?board=${board}`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ status: 'running' }),
     }).catch(() => {})
 
-    const prompt = encodeURIComponent(
-      `Please carry out this task:\n\nTitle: ${task.title}${task.body ? `\n\nDescription: ${task.body}` : ''}`
-    )
-    // Pass agentId so the chat page can pre-select the right agent
-    router.push(`/chat?kanbanTask=${task.taskId}&prompt=${prompt}&agent=${task.assignee}`)
+    // Build a prompt that tells Hermes this is a kanban task and instructs
+    // it to use its kanban tools.  The task ID is included so Hermes can
+    // reference / update it directly with kanban_complete_task etc.
+    const promptText = [
+      `Please work on the following kanban task using your kanban tools.`,
+      ``,
+      `Task ID: ${task.taskId}`,
+      `Title: ${task.title}`,
+      task.body ? `Description:\n${task.body}` : null,
+      ``,
+      `When you have finished, call your \`kanban_complete_task\` tool (or run \`/kanban complete ${task.taskId}\`) to mark it done.`,
+    ].filter(l => l !== null).join('\n')
+
+    const params = new URLSearchParams({
+      kanbanTask: task.taskId,
+      board,
+      agent:  task.assignee,
+      prompt: promptText,
+    })
+    router.push(`/chat?${params.toString()}`)
   }, [router, activeBoard])
 
   // ── Create task ─────────────────────────────────────────────────────────

@@ -39,6 +39,11 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
   const [commentText,    setCommentText]    = useState('')
   const [sendingComment, setSendingComment] = useState(false)
   const [agents,         setAgents]         = useState<Agent[]>([])
+  // Controlled select — keeps in sync when task prop updates after re-fetch
+  const [selectedAgent,  setSelectedAgent]  = useState(task.assignee)
+
+  // When the parent re-fetches tasks and passes a new task prop, sync local state
+  useEffect(() => { setSelectedAgent(task.assignee) }, [task.assignee])
 
   useEffect(() => {
     const boardParam = task.boardSlug ? `?board=${encodeURIComponent(task.boardSlug)}` : ''
@@ -260,8 +265,12 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
           <div>
             <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }}>Reassign</div>
             <select
-              defaultValue={task.assignee}
-              onChange={e => void onUpdate(task.taskId, { assignee: e.target.value })}
+              value={selectedAgent}
+              onChange={e => {
+                const next = e.target.value
+                setSelectedAgent(next)
+                void onUpdate(task.taskId, { assignee: next })
+              }}
               style={{ ...inputBase, width: '100%', cursor: 'pointer' }}
             >
               {agents.map(a => (

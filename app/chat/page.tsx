@@ -603,6 +603,12 @@ function ChatPageContent() {
   const textareaRef     = useRef<HTMLTextAreaElement>(null)
   const autoExecutedRef = useRef(false)
 
+  // Kanban context — set when the chat is launched from a kanban card
+  const kanbanTaskIdRef = useRef<string | null>(null)
+  const kanbanBoardRef  = useRef<string>('default')
+  // true = mark this kanban task done after the FIRST Hermes response
+  const kanbanAutoCompleteRef = useRef(false)
+
   // Keep refs in sync
   const setChatId = (id: string | null) => {
     setCurrentChatId(id)
@@ -822,15 +828,46 @@ function ChatPageContent() {
       setStreamStatus('')
       // Refresh sidebar so new/updated chat appears
       void fetchChats()
+
+      // Auto-mark the kanban task as done after the first Hermes response.
+      // kanbanAutoCompleteRef is cleared after the first fire so follow-up
+      // messages in the same chat session don't re-trigger it.
+      if (kanbanTaskIdRef.current && kanbanAutoCompleteRef.current) {
+        kanbanAutoCompleteRef.current = false
+        const tid   = kanbanTaskIdRef.current
+        const board = kanbanBoardRef.current
+        fetch(`/api/kanban/${tid}?board=${board}`, {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ status: 'done' }),
+        }).catch(() => {})
+      }
     }
   }, [input, isStreaming, messages, fetchChats])
 
   // ── Auto-execute prompt from URL ──────────────────────────────────────────
+  // Handles launches from the Kanban "Carry Out with Hermes" button.
+  // Params:  ?prompt=<text>  ?agent=<agentId>  ?kanbanTask=<id>  ?board=<slug>
 
   useEffect(() => {
-    const prompt = searchParams.get('prompt')
+    const prompt      = searchParams.get('prompt')
+    const agentParam  = searchParams.get('agent')
+    const kanbanTask  = searchParams.get('kanbanTask')
+    const boardParam  = searchParams.get('board')
+
     if (!prompt || autoExecutedRef.current || isStreaming) return
     autoExecutedRef.current = true
+
+    // Set the agent BEFORE sendMessage reads currentAgentIdRef
+    if (agentParam) setAgentId(agentParam)
+
+    // Store kanban context so we can auto-mark done after the response
+    if (kanbanTask) {
+      kanbanTaskIdRef.current      = kanbanTask
+      kanbanBoardRef.current       = boardParam ?? 'default'
+      kanbanAutoCompleteRef.current = true
+    }
+
     void sendMessage(prompt)
     router.replace('/chat')
   }, [isStreaming, router, searchParams, sendMessage])

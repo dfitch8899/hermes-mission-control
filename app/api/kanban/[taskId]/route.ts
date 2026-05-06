@@ -67,10 +67,11 @@ export async function GET(
 /** PATCH /api/kanban/[taskId] — state transitions
  *  ?board=<slug>  optional (default "default")
  *
- *  All transitions update DynamoDB directly so they are instant and
- *  reliable (the previous Slack-only approach let the LLM drop flags).
- *  For transitions that have Hermes side-effects (done, blocked, assignee)
- *  we ALSO fire the slash command as a best-effort background notification.
+ *  All transitions update DynamoDB directly — instant and reliable.
+ *  Only `done` and `blocked` also fire a best-effort Slack notification
+ *  so Hermes can clean up any active workspace.  Metadata-only changes
+ *  (assignee, title, priority, archive) are DDB-only to avoid Slack
+ *  pollution from Hermes LLM misinterpreting the slash commands.
  */
 export async function PATCH(
   req: NextRequest,
@@ -103,8 +104,6 @@ export async function PATCH(
         UpdateExpression: 'SET archivedAt = :ts, updatedAt = :ts2',
         ExpressionAttributeValues: { ':ts': now, ':ts2': now },
       }))
-      // Best-effort Hermes notification
-      postToSlack(`/kanban archive ${taskId}`, senderName).catch(() => {})
       return NextResponse.json({ ok: true })
     }
 
@@ -139,6 +138,8 @@ export async function PATCH(
     }
 
     // ── Assignee ────────────────────────────────────────────────────────────
+    // DDB only — no Slack notification.  Sending to Slack routes through
+    // the Hermes LLM which misinterprets the command and pollutes the channel.
     if (body.assignee) {
       await ddb.send(new UpdateCommand({
         TableName: TABLES.kanban,
@@ -146,7 +147,6 @@ export async function PATCH(
         UpdateExpression: 'SET assignee = :a, updatedAt = :ts',
         ExpressionAttributeValues: { ':a': body.assignee, ':ts': now },
       }))
-      postToSlack(`/kanban assign ${taskId} ${body.assignee}`, senderName).catch(() => {})
       return NextResponse.json({ ok: true })
     }
 
@@ -158,7 +158,6 @@ export async function PATCH(
         UpdateExpression: 'SET title = :t, updatedAt = :ts',
         ExpressionAttributeValues: { ':t': body.title, ':ts': now },
       }))
-      postToSlack(`/kanban rename ${taskId} "${body.title}"`, senderName).catch(() => {})
       return NextResponse.json({ ok: true })
     }
 
@@ -170,7 +169,6 @@ export async function PATCH(
         UpdateExpression: 'SET priority = :p, updatedAt = :ts',
         ExpressionAttributeValues: { ':p': body.priority, ':ts': now },
       }))
-      postToSlack(`/kanban priority ${taskId} ${body.priority}`, senderName).catch(() => {})
       return NextResponse.json({ ok: true })
     }
 
