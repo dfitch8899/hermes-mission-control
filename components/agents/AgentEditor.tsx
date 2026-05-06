@@ -142,29 +142,40 @@ export default function AgentEditor({ agent, open, onClose, onSaved }: Props) {
             />
           </div>
 
+          {/* Shared datalist for model autocomplete */}
+          <datalist id="agent-model-list">
+            {MODEL_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </datalist>
+
           {/* Model pair */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-mono uppercase tracking-widest text-outline">Orchestrator Model</label>
-              <select
+              <input
+                type="text"
+                list="agent-model-list"
                 value={form.orchestratorModel ?? 'gpt-5.4'}
                 onChange={e => set('orchestratorModel', e.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none"
+                placeholder="e.g. gpt-5.4"
+                className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-outline"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-              >
-                {MODEL_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
+                onFocus={e => { e.target.style.borderColor = 'rgba(60,215,255,0.4)' }}
+                onBlur={e =>  { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-mono uppercase tracking-widest text-outline">Worker Model</label>
-              <select
+              <input
+                type="text"
+                list="agent-model-list"
                 value={form.workerModel ?? 'gpt-5.4'}
                 onChange={e => set('workerModel', e.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none"
+                placeholder="e.g. gpt-5.4-mini"
+                className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-outline"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-              >
-                {MODEL_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
+                onFocus={e => { e.target.style.borderColor = 'rgba(60,215,255,0.4)' }}
+                onBlur={e =>  { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
+              />
             </div>
           </div>
 

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
-import { ddb, TABLES, QueryCommand } from '@/lib/dynamodb'
-import { postToSlack } from '@/lib/slack'
+import { ddb, TABLES, QueryCommand, PutCommand } from '@/lib/dynamodb'
 import type { KanbanTask, KanbanStatus } from '@/types/kanban'
+import { randomBytes } from 'crypto'
 
 function boardPk(slug: string) {
   return `BOARD#${slug}`
@@ -73,7 +71,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/** POST /api/kanban — create a new task via /kanban create slash command */
+/** POST /api/kanban — create a new task
+ *
+ * Writes directly to DynamoDB so that all fields (assignee, priority, etc.)
+ * are persisted correctly.  Sending the same data through the Slack→Hermes
+ * bridge causes the LLM to drop structured flags like --assignee, so we
+ * bypass that path for creation.  The task ID format matches Hermes's own
+ * convention (`t_<8 hex chars>`) so it is recognisable if Hermes ever picks
+ * it up via "Launch in Chat".
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({})) as {
@@ -90,24 +96,40 @@ export async function POST(req: NextRequest) {
     const title = (body.title ?? '').trim()
     if (!title) return NextResponse.json({ error: 'title required' }, { status: 400 })
 
-    const session    = await getServerSession(authOptions)
-    const senderName = session?.user?.name ?? session?.user?.email ?? ''
+    const board        = body.board ?? 'default'
+    const assignee     = (body.assignee      ?? 'general').trim()
+    const priority     = (body.priority      ?? 'normal').trim()
+    const workspace    = (body.workspaceType ?? 'scratch').trim()
+    const description  = (body.description   ?? '').trim()
+    const tags         = body.tags ?? []
+    const now          = new Date().toISOString()
 
-    const assignee    = body.assignee      ?? 'general'
-    const priority    = body.priority      ?? 'normal'
-    const workspace   = body.workspaceType ?? 'scratch'
-    const description = (body.description  ?? '').trim()
+    // Generate a task ID in Hermes's format so it's cross-compatible
+    const taskId = `t_${randomBytes(4).toString('hex')}`
 
-    let cmd = `/kanban create "${title}"`
-    if (assignee)                        cmd += ` --assignee ${assignee}`
-    if (priority && priority !== 'normal') cmd += ` --priority ${priority}`
-    if (workspace && workspace !== 'scratch') cmd += ` --workspace "${workspace}"`
-    if (body.tenant)                     cmd += ` --tenant "${body.tenant}"`
-    if (body.board && body.board !== 'default') cmd += ` --board "${body.board}"`
-    if (description)                     cmd += `\n${description}`
+    await ddb.send(new PutCommand({
+      TableName: TABLES.kanban,
+      Item: {
+        pk:            `BOARD#${board}`,
+        sk:            `TASK#${taskId}`,
+        taskId,
+        title,
+        body:          description,
+        status:        'triage',
+        assignee,
+        priority,
+        workspaceType: workspace,
+        tags,
+        tenant:        body.tenant ?? null,
+        parentIds:     [],
+        childIds:      [],
+        commentCount:  0,
+        createdAt:     now,
+        updatedAt:     now,
+      },
+    }))
 
-    await postToSlack(cmd, senderName)
-    return NextResponse.json({ ok: true }, { status: 202 })
+    return NextResponse.json({ ok: true, taskId }, { status: 202 })
   } catch (err) {
     console.error('[api/kanban POST]', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })

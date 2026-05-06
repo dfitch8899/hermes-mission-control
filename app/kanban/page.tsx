@@ -7,7 +7,7 @@ import KanbanColumn from '@/components/kanban/KanbanColumn'
 import TaskDrawer from '@/components/kanban/TaskDrawer'
 import NewTaskModal from '@/components/kanban/NewTaskModal'
 import NewBoardModal from '@/components/kanban/NewBoardModal'
-import { Plus, RefreshCw, Search, ChevronDown, LayoutGrid } from 'lucide-react'
+import { Plus, RefreshCw, Search, ChevronDown, LayoutGrid, Trash2 } from 'lucide-react'
 import type { KanbanTask, KanbanStatus, KanbanBoard } from '@/types/kanban'
 import { KANBAN_COLUMNS } from '@/types/kanban'
 
@@ -21,6 +21,7 @@ export default function KanbanPage() {
   const [activeBoard,   setActiveBoard]   = useState<string>('default')
   const [showBoardMenu, setShowBoardMenu] = useState(false)
   const [showNewBoard,  setShowNewBoard]  = useState(false)
+  const [deletingBoard, setDeletingBoard] = useState<string | null>(null)
 
   // ── Task state ──────────────────────────────────────────────────────────
   const [tasks,          setTasks]          = useState<KanbanTask[]>([])
@@ -68,7 +69,7 @@ export default function KanbanPage() {
     if (!task || task.status === newStatus) return
     setTasks(prev => prev.map(t => t.taskId === taskId ? { ...t, status: newStatus } : t))
     try {
-      await fetch(`/api/kanban/${taskId}`, {
+      await fetch(`/api/kanban/${taskId}?board=${activeBoard}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -76,26 +77,40 @@ export default function KanbanPage() {
     } catch {
       setTasks(prev => prev.map(t => t.taskId === taskId ? { ...t, status: task.status } : t))
     }
-  }, [tasks])
+  }, [tasks, activeBoard])
 
   // ── Task update (from drawer) ───────────────────────────────────────────
   const handleUpdate = useCallback(async (taskId: string, patch: Record<string, unknown>) => {
     try {
-      await fetch(`/api/kanban/${taskId}`, {
+      await fetch(`/api/kanban/${taskId}?board=${activeBoard}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       })
       setSelectedTask(null)
-      setTimeout(() => void fetchTasks(), 2000)
+      setTimeout(() => void fetchTasks(), 800)
     } catch { /* silent */ }
-  }, [fetchTasks])
+  }, [fetchTasks, activeBoard])
 
-  // ── Launch task in chat ─────────────────────────────────────────────────
-  const handleLaunchInChat = useCallback((task: KanbanTask) => {
-    const prompt = encodeURIComponent(`Please carry out this task:\n\nTitle: ${task.title}\n${task.body ? `\nDescription: ${task.body}` : ''}`)
-    router.push(`/chat?kanbanTask=${task.taskId}&prompt=${prompt}`)
-  }, [router])
+  // ── Launch task in chat (and mark as running) ───────────────────────────
+  const handleLaunchInChat = useCallback(async (task: KanbanTask) => {
+    // Optimistically move to "running"
+    setTasks(prev => prev.map(t => t.taskId === task.taskId ? { ...t, status: 'running' } : t))
+    setSelectedTask(null)
+
+    // Persist the status change immediately
+    await fetch(`/api/kanban/${task.taskId}?board=${task.boardSlug ?? activeBoard}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ status: 'running' }),
+    }).catch(() => {})
+
+    const prompt = encodeURIComponent(
+      `Please carry out this task:\n\nTitle: ${task.title}${task.body ? `\n\nDescription: ${task.body}` : ''}`
+    )
+    // Pass agentId so the chat page can pre-select the right agent
+    router.push(`/chat?kanbanTask=${task.taskId}&prompt=${prompt}&agent=${task.assignee}`)
+  }, [router, activeBoard])
 
   // ── Create task ─────────────────────────────────────────────────────────
   const handleCreate = useCallback(async (data: {
@@ -107,7 +122,8 @@ export default function KanbanPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...data, board: activeBoard }),
     })
-    setTimeout(() => void fetchTasks(), 2500)
+    // Task is written to DDB immediately, so a short delay is enough to see it
+    setTimeout(() => void fetchTasks(), 500)
   }, [fetchTasks, activeBoard])
 
   // ── Create board ────────────────────────────────────────────────────────
@@ -119,10 +135,29 @@ export default function KanbanPage() {
     })
     if (r.ok) {
       const d = await r.json() as { board: KanbanBoard }
-      setBoards(prev => [...prev, d.board].sort((a, b) => a.slug === 'default' ? -1 : b.slug === 'default' ? 1 : a.name.localeCompare(b.name)))
+      setBoards(prev =>
+        [...prev, d.board].sort((a, b) =>
+          a.slug === 'default' ? -1 : b.slug === 'default' ? 1 : a.name.localeCompare(b.name)
+        )
+      )
       setActiveBoard(d.board.slug)
     }
   }, [])
+
+  // ── Delete board ────────────────────────────────────────────────────────
+  const handleDeleteBoard = useCallback(async (slug: string) => {
+    if (slug === 'default') return
+    setDeletingBoard(slug)
+    try {
+      const r = await fetch(`/api/kanban/boards/${slug}`, { method: 'DELETE' })
+      if (r.ok) {
+        setBoards(prev => prev.filter(b => b.slug !== slug))
+        if (activeBoard === slug) setActiveBoard('default')
+      }
+    } finally {
+      setDeletingBoard(null)
+    }
+  }, [activeBoard])
 
   // ── Group by column ─────────────────────────────────────────────────────
   const tasksByStatus = KANBAN_COLUMNS.reduce<Record<KanbanStatus, KanbanTask[]>>(
@@ -199,24 +234,42 @@ export default function KanbanPage() {
                   background: '#131b2e',
                   border: '1px solid rgba(255,255,255,0.1)',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                  minWidth: 180,
+                  minWidth: 200,
                   zIndex: 100,
                 }}
               >
                 {boards.map(b => (
-                  <button
+                  <div
                     key={b.slug}
-                    onClick={() => { setActiveBoard(b.slug); setShowBoardMenu(false) }}
-                    className="w-full text-left px-4 py-2.5 text-[11px] font-mono transition-colors"
+                    className="flex items-center group"
                     style={{
-                      color: b.slug === activeBoard ? '#3cd7ff' : '#dde2f9',
                       background: b.slug === activeBoard ? 'rgba(60,215,255,0.08)' : 'transparent',
                     }}
-                    onMouseEnter={e => { if (b.slug !== activeBoard) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
-                    onMouseLeave={e => { if (b.slug !== activeBoard) e.currentTarget.style.background = 'transparent' }}
+                    onMouseEnter={e => { if (b.slug !== activeBoard) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)' }}
+                    onMouseLeave={e => { if (b.slug !== activeBoard) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                   >
-                    {b.name}
-                  </button>
+                    <button
+                      onClick={() => { setActiveBoard(b.slug); setShowBoardMenu(false) }}
+                      className="flex-1 text-left px-4 py-2.5 text-[11px] font-mono transition-colors"
+                      style={{ color: b.slug === activeBoard ? '#3cd7ff' : '#dde2f9' }}
+                    >
+                      {b.name}
+                    </button>
+                    {b.slug !== 'default' && (
+                      <button
+                        onClick={e => { e.stopPropagation(); void handleDeleteBoard(b.slug) }}
+                        disabled={deletingBoard === b.slug}
+                        className="opacity-0 group-hover:opacity-100 px-2 py-2.5 transition-opacity"
+                        style={{ color: '#f43f5e' }}
+                        title={`Delete board "${b.name}"`}
+                      >
+                        {deletingBoard === b.slug
+                          ? <RefreshCw size={11} className="animate-spin" />
+                          : <Trash2 size={11} />
+                        }
+                      </button>
+                    )}
+                  </div>
                 ))}
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                   <button
@@ -314,7 +367,7 @@ export default function KanbanPage() {
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
           onUpdate={handleUpdate}
-          onLaunchInChat={handleLaunchInChat}
+          onLaunchInChat={task => void handleLaunchInChat(task)}
         />
       )}
 

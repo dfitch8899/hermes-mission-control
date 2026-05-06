@@ -14,12 +14,25 @@ export interface Agent {
 }
 
 export const MODEL_OPTIONS = [
-  { value: 'gpt-5.4',          label: 'GPT-5.4 (Codex)' },
-  { value: 'gpt-5.4-mini',     label: 'GPT-5.4 Mini (Codex)' },
-  { value: 'gpt-5.3-codex',    label: 'GPT-5.3 Codex' },
-  { value: 'gpt-5.2-codex',    label: 'GPT-5.2 Codex' },
-  { value: 'gpt-5.1-codex-max','label': 'GPT-5.1 Codex Max' },
-  { value: 'gpt-5.1-codex-mini','label':'GPT-5.1 Codex Mini' },
+  // ── Codex (chatgpt.com/backend-api/codex endpoint) ──────────────────────
+  { value: 'gpt-5.4',              label: 'GPT-5.4 (Codex)'        },
+  { value: 'gpt-5.4-mini',         label: 'GPT-5.4 Mini (Codex)'   },
+  { value: 'gpt-5.5',              label: 'GPT-5.5 (Codex)'        },
+  { value: 'gpt-5.5-mini',         label: 'GPT-5.5 Mini (Codex)'   },
+  { value: 'gpt-5.3-codex',        label: 'GPT-5.3 Codex'          },
+  { value: 'gpt-5.2-codex',        label: 'GPT-5.2 Codex'          },
+  { value: 'gpt-5.1-codex-max',    label: 'GPT-5.1 Codex Max'      },
+  { value: 'gpt-5.1-codex-mini',   label: 'GPT-5.1 Codex Mini'     },
+  // ── GPT-4o family ────────────────────────────────────────────────────────
+  { value: 'gpt-4o',               label: 'GPT-4o'                  },
+  { value: 'gpt-4o-mini',          label: 'GPT-4o Mini'             },
+  { value: 'gpt-4-turbo',          label: 'GPT-4 Turbo'             },
+  // ── Reasoning (o-series) ─────────────────────────────────────────────────
+  { value: 'o1',                   label: 'o1'                      },
+  { value: 'o1-mini',              label: 'o1 Mini'                 },
+  { value: 'o3',                   label: 'o3'                      },
+  { value: 'o3-mini',              label: 'o3 Mini'                 },
+  { value: 'o4-mini',              label: 'o4 Mini'                 },
 ] as const
 
 export const POLICY_OPTIONS = [
