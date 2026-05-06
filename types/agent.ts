@@ -15,11 +15,11 @@ export interface Agent {
 
 export const MODEL_OPTIONS = [
   { value: 'gpt-5.4',          label: 'GPT-5.4 (Codex)' },
-  { value: 'gpt-5',            label: 'GPT-5' },
-  { value: 'gpt-5-mini',       label: 'GPT-5 Mini' },
-  { value: 'gpt-5-nano',       label: 'GPT-5 Nano' },
-  { value: 'o3',               label: 'o3' },
-  { value: 'o4-mini',          label: 'o4-mini' },
+  { value: 'gpt-5.4-mini',     label: 'GPT-5.4 Mini (Codex)' },
+  { value: 'gpt-5.3-codex',    label: 'GPT-5.3 Codex' },
+  { value: 'gpt-5.2-codex',    label: 'GPT-5.2 Codex' },
+  { value: 'gpt-5.1-codex-max','label': 'GPT-5.1 Codex Max' },
+  { value: 'gpt-5.1-codex-mini','label':'GPT-5.1 Codex Mini' },
 ] as const
 
 export const POLICY_OPTIONS = [
@@ -37,8 +37,8 @@ export const BUILTIN_AGENTS: Omit<Agent, 'createdAt' | 'updatedAt'>[] = [
     color:              '#3cd7ff',
     systemPrompt:       '',
     orchestratorModel:  'gpt-5.4',
-    workerModel:        'gpt-5.4',
-    orchestratorPolicy: 'auto',
+    workerModel:        'gpt-5.4',   // same model — general tasks don't benefit from splitting
+    orchestratorPolicy: 'never',     // skip orchestration overhead for simple chat
     isBuiltin:          true,
   },
   {
@@ -48,8 +48,8 @@ export const BUILTIN_AGENTS: Omit<Agent, 'createdAt' | 'updatedAt'>[] = [
     icon:               '💻',
     color:              '#4ade80',
     systemPrompt:       'You are a senior software engineer. Prefer minimal targeted edits over rewrites. Always consider test coverage and backward compatibility.',
-    orchestratorModel:  'gpt-5.4',
-    workerModel:        'gpt-5.4',
+    orchestratorModel:  'gpt-5.4',       // planner uses the full model
+    workerModel:        'gpt-5.4-mini',  // execution steps use mini
     orchestratorPolicy: 'auto',
     isBuiltin:          true,
   },
@@ -61,7 +61,7 @@ export const BUILTIN_AGENTS: Omit<Agent, 'createdAt' | 'updatedAt'>[] = [
     color:              '#f97316',
     systemPrompt:       'You are a brand strategist. Write audience-first, conversion-oriented copy. Keep it concise and punchy.',
     orchestratorModel:  'gpt-5.4',
-    workerModel:        'gpt-5.4',
+    workerModel:        'gpt-5.4-mini',
     orchestratorPolicy: 'auto',
     isBuiltin:          true,
   },
@@ -72,8 +72,8 @@ export const BUILTIN_AGENTS: Omit<Agent, 'createdAt' | 'updatedAt'>[] = [
     icon:               '🔬',
     color:              '#a78bfa',
     systemPrompt:       'You are a research analyst. Synthesize multiple sources, include inline citations, and flag uncertainty or conflicting evidence.',
-    orchestratorModel:  'gpt-5.4',
-    workerModel:        'gpt-5.4',
+    orchestratorModel:  'gpt-5.4',       // research always uses full model for plan + synthesis
+    workerModel:        'gpt-5.4-mini',  // individual search/retrieve steps use mini
     orchestratorPolicy: 'always',
     isBuiltin:          true,
   },
