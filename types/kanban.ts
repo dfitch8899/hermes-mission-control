@@ -14,7 +14,7 @@ export interface KanbanTask {
   title:          string
   body:           string
   status:         KanbanStatus
-  assignee:       string        // agentId
+  assignee:       string
   priority:       'low' | 'normal' | 'high' | 'critical'
   tenant?:        string
   workspaceType?: string
@@ -27,6 +27,23 @@ export interface KanbanTask {
   updatedAt:      string
   completedAt?:   string
   archivedAt?:    string
+  claimedBy?:     string
+  claimedAt?:     string
+  leaseExpiresAt?: string
+  lastHeartbeatAt?: string
+  attempt?:       number
+  blockedReason?: string
+  resultSummary?: string
+  activeRunId?:   string
+  lastRunStatus?: 'idle' | 'running' | 'blocked' | 'failed' | 'done'
+  dependencyState?: 'clear' | 'waiting_on_parents'
+  waitingOnTaskIds?: string[]
+  latestHandoff?: {
+    from: string
+    to: string
+    ts: string
+    note?: string
+  }
 }
 
 export interface KanbanComment {

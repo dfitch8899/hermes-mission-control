@@ -69,11 +69,12 @@ export default function KanbanPage() {
     if (!task || task.status === newStatus) return
     setTasks(prev => prev.map(t => t.taskId === taskId ? { ...t, status: newStatus } : t))
     try {
-      await fetch(`/api/kanban/${taskId}?board=${activeBoard}`, {
+      const response = await fetch(`/api/kanban/${taskId}?board=${activeBoard}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
+      if (!response.ok) throw new Error(`PATCH failed: ${response.status}`)
     } catch {
       setTasks(prev => prev.map(t => t.taskId === taskId ? { ...t, status: task.status } : t))
     }
@@ -81,15 +82,23 @@ export default function KanbanPage() {
 
   // ── Task update (from drawer) ───────────────────────────────────────────
   const handleUpdate = useCallback(async (taskId: string, patch: Record<string, unknown>) => {
-    try {
-      await fetch(`/api/kanban/${taskId}?board=${activeBoard}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      })
-      setSelectedTask(null)
-      setTimeout(() => void fetchTasks(), 800)
-    } catch { /* silent */ }
+    const response = await fetch(`/api/kanban/${taskId}?board=${activeBoard}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+
+    if (!response.ok) {
+      throw new Error(`PATCH failed: ${response.status}`)
+    }
+
+    const data = await response.json().catch(() => null) as { task?: KanbanTask } | null
+    if (data?.task) {
+      setTasks(prev => prev.map(task => task.taskId === taskId ? { ...task, ...data.task } : task))
+      setSelectedTask(prev => prev?.taskId === taskId ? { ...prev, ...data.task } : prev)
+    }
+
+    setTimeout(() => void fetchTasks(), 800)
   }, [fetchTasks, activeBoard])
 
   // ── Launch task in chat (and mark as running) ───────────────────────────
