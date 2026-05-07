@@ -2,25 +2,25 @@
  * Hermes sync status + on-demand sync trigger.
  *
  * GET  /api/hermes/sync  → returns last sync metadata from DynamoDB
- * POST /api/hermes/sync  → sends a Slack message asking Hermes to run
- *                          the sync script, then returns updated metadata
+ * POST /api/hermes/sync  → tells Hermes to run sync_to_mc.py via hermesClient.exec(),
+ *                          then returns updated metadata
+ *
+ * hermesClient.exec() uses the direct dashboard transport when HERMES_TRANSPORT=direct,
+ * falling back to the Slack relay otherwise.
  */
 import { NextResponse } from 'next/server'
-import { ddb, TABLES, GetCommand, PutCommand } from '@/lib/dynamodb'
-import { postToSlack } from '@/lib/slack'
+import { ddb, TABLES, GetCommand } from '@/lib/dynamodb'
+import { hermesClient } from '@/lib/hermesClient'
 
-const BOT_TOKEN     = process.env.SLACK_BOT_TOKEN!
-const CHANNEL_ID    = process.env.HERMES_SLACK_CHANNEL_ID!
-const HERMES_BOT_ID = process.env.HERMES_SLACK_BOT_ID!
+const SYNC_TIMEOUT  = 30_000   // ms to wait for DynamoDB to reflect the new sync
+const POLL_INTERVAL =  2_000   // ms between polls
 
-const SYNC_META_ID   = '_HERMES_SYNC_META'
-const SYNC_TIMEOUT   = 30_000   // ms to wait for Hermes to reply
-const POLL_INTERVAL  =  2_000   // ms between polls
+const SYNC_META_ID = '_HERMES_SYNC_META'
 
 interface SyncMeta {
   lastSyncedAt: string | null
-  skillCount: number
-  memoryCount: number
+  skillCount:   number
+  memoryCount:  number
 }
 
 async function getSyncMeta(): Promise<SyncMeta> {
@@ -32,7 +32,7 @@ async function getSyncMeta(): Promise<SyncMeta> {
     const item = res.Item as Record<string, unknown> | undefined
     if (!item) return { lastSyncedAt: null, skillCount: 0, memoryCount: 0 }
     return {
-      lastSyncedAt: (item.updatedAt as string) ?? null,
+      lastSyncedAt: (item.updatedAt  as string) ?? null,
       skillCount:   Number(item.skillCount  ?? 0),
       memoryCount:  Number(item.memoryCount ?? 0),
     }
@@ -47,42 +47,28 @@ export async function GET() {
 }
 
 export async function POST() {
-  // 1. Capture the current sync timestamp so we can detect a new sync
-  const before = await getSyncMeta()
-  const beforeTs = before.lastSyncedAt
+  // 1. Capture current sync timestamp so we can detect when a new sync lands
+  const before    = await getSyncMeta()
+  const beforeTs  = before.lastSyncedAt
 
-  // 2. Post sync command to Slack — the sync script runs inside the container,
-  //    so Hermes executes it and replies in the thread when done.
+  // 2. Ask Hermes to run the sync script via hermesClient.exec()
+  //    Falls back to Slack relay when HERMES_TRANSPORT is not "direct".
   const syncCommand = 'PYTHONPATH=/opt/data/lib:$PYTHONPATH python3 /opt/data/scripts/sync_to_mc.py'
-  const syncBody    = `Please run this command and reply with the output:\n\`\`\`\n${syncCommand}\n\`\`\``
-
-  let parentTs: string
   try {
-    const postResult = await postToSlack(syncBody, 'Sync')
-    parentTs = postResult.ts
-
-    // 3. Poll for Hermes reply
-    const deadline = Date.now() + SYNC_TIMEOUT
-    while (Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, POLL_INTERVAL))
-
-      const repliesRes = await fetch(
-        `https://slack.com/api/conversations.replies?channel=${CHANNEL_ID}&ts=${parentTs}&limit=10`,
-        { headers: { Authorization: `Bearer ${BOT_TOKEN}` } }
-      )
-      const repliesData = await repliesRes.json()
-      if (!repliesData.ok) continue
-
-      const msgs: Array<{ ts: string; bot_id?: string; text: string }> = repliesData.messages ?? []
-      const hermesReplied = msgs.some(m => m.bot_id === HERMES_BOT_ID && m.ts !== parentTs)
-      if (hermesReplied) break
-    }
+    await hermesClient.exec(syncCommand, 'Mission Control')
   } catch {
-    // Even if Slack fails, fall through and return current meta
+    // Non-fatal — fall through and return current meta
   }
 
-  // 4. Read updated sync meta (Hermes may have already updated DynamoDB)
-  const after = await getSyncMeta()
+  // 3. Poll DynamoDB until the timestamp advances or we time out
+  const deadline = Date.now() + SYNC_TIMEOUT
+  let after = before
+
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL))
+    after = await getSyncMeta()
+    if (after.lastSyncedAt !== beforeTs) break
+  }
 
   return NextResponse.json({
     ...after,
