@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { ddb, TABLES, GetCommand, QueryCommand, UpdateCommand } from '@/lib/dynamodb'
-import { postToSlack } from '@/lib/slack'
+import { hermesClient } from '@/lib/hermesClient'
 import type { KanbanTask, KanbanComment } from '@/types/kanban'
 
 /** GET /api/kanban/[taskId] — single task + comment thread
@@ -118,12 +118,10 @@ export async function PATCH(
 
       if (s === 'done') {
         updateExpr += ', completedAt = :ts'
-        // Best-effort Hermes side-effect (mark workspace complete etc.)
-        const result = body.result ? ` "${body.result}"` : ''
-        postToSlack(`/kanban complete ${taskId}${result}`, senderName).catch(() => {})
+        // Best-effort Hermes side-effect (mark workspace complete, clean up active session).
+        hermesClient.kanbanComplete(taskId, body.result, senderName).catch(() => {})
       } else if (s === 'blocked') {
-        const reason = body.reason ? ` "${body.reason}"` : ''
-        postToSlack(`/kanban block ${taskId}${reason}`, senderName).catch(() => {})
+        hermesClient.kanbanBlock(taskId, body.reason, senderName).catch(() => {})
       }
       // 'running', 'triage', 'todo', 'ready' → DDB only (no Hermes CLI equivalent)
 

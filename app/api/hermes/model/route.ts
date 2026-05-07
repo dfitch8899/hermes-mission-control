@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ddb, TABLES, GetCommand, PutCommand } from '@/lib/dynamodb'
-import { postToSlack } from '@/lib/slack'
+import { hermesClient } from '@/lib/hermesClient'
 import { CODEX_MODELS } from '@/lib/codexModels'
 
 const SETTINGS_PK = 'SETTINGS'
@@ -43,13 +43,10 @@ export async function POST(req: NextRequest) {
       Item: { pk: SETTINGS_PK, sk: SETTINGS_SK, activeModel: model, updatedAt: now },
     }))
 
-    // 2. Send /model <name> to Hermes via Slack so config.yaml is updated live.
-    //    Best-effort — we don't fail the request if Slack is unavailable.
-    try {
-      await postToSlack(`/model ${model}`, 'Mission Control')
-    } catch (slackErr) {
-      console.warn('[api/hermes/model] Slack /model post failed (non-fatal):', slackErr)
-    }
+    // 2. Tell Hermes to update config.yaml live — best-effort via hermesClient.
+    await hermesClient.modelSet(model).catch(
+      (err) => console.warn('[api/hermes/model] hermesClient.modelSet failed (non-fatal):', err),
+    )
 
     return NextResponse.json({ ok: true, model })
   } catch (err) {

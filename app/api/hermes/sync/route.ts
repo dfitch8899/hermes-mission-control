@@ -7,12 +7,11 @@
  */
 import { NextResponse } from 'next/server'
 import { ddb, TABLES, GetCommand, PutCommand } from '@/lib/dynamodb'
+import { postToSlack } from '@/lib/slack'
 
-const BOT_TOKEN      = process.env.SLACK_BOT_TOKEN!
-const USER_TOKEN     = process.env.SLACK_USER_TOKEN!
-const CHANNEL_ID     = process.env.HERMES_SLACK_CHANNEL_ID!
-const HERMES_USER_ID = process.env.HERMES_SLACK_USER_ID!
-const HERMES_BOT_ID  = process.env.HERMES_SLACK_BOT_ID!
+const BOT_TOKEN     = process.env.SLACK_BOT_TOKEN!
+const CHANNEL_ID    = process.env.HERMES_SLACK_CHANNEL_ID!
+const HERMES_BOT_ID = process.env.HERMES_SLACK_BOT_ID!
 
 const SYNC_META_ID   = '_HERMES_SYNC_META'
 const SYNC_TIMEOUT   = 30_000   // ms to wait for Hermes to reply
@@ -52,22 +51,15 @@ export async function POST() {
   const before = await getSyncMeta()
   const beforeTs = before.lastSyncedAt
 
-  // 2. Post sync command to Slack
+  // 2. Post sync command to Slack — the sync script runs inside the container,
+  //    so Hermes executes it and replies in the thread when done.
   const syncCommand = 'PYTHONPATH=/opt/data/lib:$PYTHONPATH python3 /opt/data/scripts/sync_to_mc.py'
-  const message = `<@${HERMES_USER_ID}> [Mission Control SYNC] Please run this command and reply with the output:\n\`\`\`\n${syncCommand}\n\`\`\``
+  const syncBody    = `Please run this command and reply with the output:\n\`\`\`\n${syncCommand}\n\`\`\``
 
-  let postRes
+  let parentTs: string
   try {
-    postRes = await fetch('https://slack.com/api/chat.postMessage', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${USER_TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel: CHANNEL_ID, text: message, as_user: true }),
-    })
-    const postData = await postRes.json()
-    if (!postData.ok) {
-      return NextResponse.json({ error: `Slack post failed: ${postData.error}` }, { status: 500 })
-    }
-    const parentTs: string = postData.ts
+    const postResult = await postToSlack(syncBody, 'Sync')
+    parentTs = postResult.ts
 
     // 3. Poll for Hermes reply
     const deadline = Date.now() + SYNC_TIMEOUT
