@@ -13,7 +13,7 @@ export async function POST(
   } catch (err) {
     console.error(`[api/kanban/${params.taskId}/dispatch POST]`, err)
     const message = err instanceof Error ? err.message : String(err)
-    const status = message.includes('not available') ? 409 : message.includes('assign') ? 409 : message.includes('triage') ? 409 : message.includes('finished') ? 409 : 500
+    const status = message.includes('not available') ? 409 : message.includes('assign') ? 409 : message.includes('triage') ? 409 : message.includes('finished') ? 409 : message.includes('already running') ? 409 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }

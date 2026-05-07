@@ -44,7 +44,7 @@ export async function PATCH(
   } catch (err) {
     console.error(`[api/kanban/${params.taskId} PATCH]`, err)
     const message = err instanceof Error ? err.message : String(err)
-    const status = message.includes('No recognized') ? 400 : message.includes('not found') ? 404 : message.includes('not valid') ? 409 : 500
+    const status = message.includes('No recognized') ? 400 : message.includes('not found') ? 404 : message.includes('not valid') ? 409 : message.includes('Cannot set status') ? 409 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }
