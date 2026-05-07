@@ -1,40 +1,45 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import TopAppBar from '@/components/layout/TopAppBar'
 import TerminalOutput, { TerminalLine } from '@/components/terminal/TerminalOutput'
 import TerminalInput from '@/components/terminal/TerminalInput'
 import { v4 as uuid } from 'uuid'
 
 const HELP_TEXT = `
-HERMES MISSION CONTROL — Terminal v2.1
+HERMES MISSION CONTROL — Terminal v2.2
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Available commands:
-  help                     Show this help message
-  clear                    Clear terminal output
+  help                          Show this help message
+  clear                         Clear terminal output
 
-  tasks list               List all tasks
-  tasks add <title>        Add a new task (interactive)
-  tasks update <id> <status>  Update task status
-  tasks done <id>          Mark task as done
+  tasks list                    List kanban tasks
+  tasks add <title>             Create a new task
+  tasks done <id>               Mark a task as done
+  tasks update <id> <status>    Update task status
 
-  memory list              List all memories
-  memory search <query>    Search memories by query
-  memory add               Add a new memory (interactive)
+  memory list                   List all memories
+  memory search <query>         Search memories by query
+  memory add                    Add a new memory (interactive)
 
-  ecs status               Show ECS service metrics
-  ecs logs [n]             Show last N log lines (default 20)
-  ecs tasks                List running ECS tasks
+  ecs status                    Show ECS service metrics
+  ecs logs [n]                  Show last N log lines (default 20)
+  ecs tasks                     List running ECS tasks
 
-  calendar list            List all scheduled events
+  calendar list                 List all scheduled events
+
+  hermes <cmd>                  Send a whitelisted command to Hermes
+                                e.g.  hermes /kanban list
+                                      hermes /model gpt-5.4
+                                      hermes /profiles list
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Use ↑/↓ arrows to navigate command history.
 `.trim()
 
 type MultiStepState = {
-  command: 'tasks_add' | 'memory_add'
+  command: 'memory_add'
   step: number
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>
@@ -46,61 +51,87 @@ function makeLine(type: TerminalLine['type'], content: string): TerminalLine {
 
 export default function TerminalPage() {
   const [lines, setLines] = useState<TerminalLine[]>([
-    makeLine('system', 'Hermes Mission Control — Terminal v2.1'),
+    makeLine('system', 'Hermes Mission Control — Terminal v2.2'),
     makeLine('system', 'Type "help" for available commands.'),
     makeLine('info', 'Connected to hermes-agent cluster'),
-    makeLine('ok', 'Agent status: ONLINE — uptime 3d 7h 22m'),
   ])
   const [processing, setProcessing] = useState(false)
   const [multiStep, setMultiStep] = useState<MultiStepState>(null)
   const [currentPrompt, setCurrentPrompt] = useState<string | undefined>(undefined)
+  // Ref to the mutable streaming line id
+  const streamingLineId = useRef<string | null>(null)
 
   const addLine = useCallback((type: TerminalLine['type'], content: string) => {
     setLines(prev => [...prev, makeLine(type, content)])
   }, [])
 
-  const addLines = useCallback((newLines: TerminalLine[]) => {
-    setLines(prev => [...prev, ...newLines])
+  /** Update or append the streaming reply line */
+  const setStreamLine = useCallback((text: string) => {
+    setLines(prev => {
+      if (streamingLineId.current) {
+        return prev.map(l => l.id === streamingLineId.current ? { ...l, content: text } : l)
+      }
+      const newLine = makeLine('output', text)
+      streamingLineId.current = newLine.id
+      return [...prev, newLine]
+    })
   }, [])
 
-  const executeCommand = useCallback(async (raw: string) => {
-    const cmd = raw.trim()
+  // ─── hermes <cmd> — streams SSE from /api/terminal/execute ─────────────────
+  const runHermesCommand = useCallback(async (command: string) => {
+    setProcessing(true)
+    streamingLineId.current = null
+    addLine('info', '⏳ Sending to Hermes...')
 
-    // Multi-step flow
-    if (multiStep) {
-      if (multiStep.command === 'tasks_add') {
-        if (multiStep.step === 1) {
-          // Got title
-          const newData = { ...multiStep.data, title: cmd }
-          addLine('system', 'Priority? (low/medium/high/critical):')
-          setCurrentPrompt('Priority > ')
-          setMultiStep({ ...multiStep, step: 2, data: newData })
-        } else if (multiStep.step === 2) {
-          // Got priority
-          const priorities = ['low', 'medium', 'high', 'critical']
-          const priority = priorities.includes(cmd.toLowerCase()) ? cmd.toLowerCase() : 'medium'
-          const prevData = multiStep.data as Record<string, string>
-          setMultiStep(null)
-          setCurrentPrompt(undefined)
-          setProcessing(true)
-          try {
-            const res = await fetch('/api/tasks', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: prevData.title || '', priority, description: '', status: 'queued', assignee: 'human', tags: [], source: 'manual' }),
-            })
-            const data = await res.json()
-            const taskId = data.task?.taskId || data.taskId || 'TX-???'
-            addLine('ok', `Task created: ${taskId} — "${prevData.title || ''}" [${priority}]`)
-          } catch {
-            addLine('error', 'Failed to create task — check API connection')
-          } finally {
-            setProcessing(false)
-          }
-        }
+    try {
+      const res = await fetch('/api/terminal/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        addLine('error', err.error ?? 'Request failed')
         return
       }
 
+      const reader = res.body?.getReader()
+      if (!reader) { addLine('error', 'No response stream'); return }
+
+      const dec = new TextDecoder()
+      let buf = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const parts = buf.split('\n\n')
+        buf = parts.pop() ?? ''
+        for (const part of parts) {
+          const line = part.trim()
+          if (!line.startsWith('data: ')) continue
+          try {
+            const event = JSON.parse(line.slice(6))
+            if (event.type === 'text_replace') setStreamLine(event.text)
+            else if (event.type === 'error') addLine('error', event.message)
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch {
+      addLine('error', 'Stream error — check network connection')
+    } finally {
+      streamingLineId.current = null
+      setProcessing(false)
+    }
+  }, [addLine, setStreamLine])
+
+  // ─── Main command dispatcher ────────────────────────────────────────────────
+  const executeCommand = useCallback(async (raw: string) => {
+    const cmd = raw.trim()
+
+    // Multi-step flow (memory add only)
+    if (multiStep) {
       if (multiStep.command === 'memory_add') {
         if (multiStep.step === 1) {
           const newData = { ...multiStep.data, title: cmd }
@@ -115,7 +146,7 @@ export default function TerminalPage() {
           setCurrentPrompt('Content > ')
           setMultiStep({ ...multiStep, step: 3, data: newData })
         } else if (multiStep.step === 3) {
-          const prevMemData = multiStep.data as Record<string, string>
+          const prevData = multiStep.data as Record<string, string>
           setMultiStep(null)
           setCurrentPrompt(undefined)
           setProcessing(true)
@@ -123,11 +154,14 @@ export default function TerminalPage() {
             const res = await fetch('/api/memories', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: prevMemData.title || '', type: prevMemData.type || 'context', content: cmd, tags: [], source: 'user', relevanceScore: 0.7 }),
+              body: JSON.stringify({
+                title: prevData.title || '', type: prevData.type || 'context',
+                content: cmd, tags: [], source: 'user', relevanceScore: 0.7,
+              }),
             })
             const data = await res.json()
             const memId = data.memory?.memoryId || data.memoryId || 'MEM-???'
-            addLine('ok', `Memory created: ${memId} — "${prevMemData.title || ''}" [${prevMemData.type || 'context'}]`)
+            addLine('ok', `Memory created: ${memId} — "${prevData.title || ''}" [${prevData.type || 'context'}]`)
           } catch {
             addLine('error', 'Failed to create memory — check API connection')
           } finally {
@@ -142,8 +176,8 @@ export default function TerminalPage() {
     addLine('prompt', cmd)
 
     const parts = cmd.split(/\s+/)
-    const base = parts[0].toLowerCase()
-    const sub = parts[1]?.toLowerCase()
+    const base  = parts[0].toLowerCase()
+    const sub   = parts[1]?.toLowerCase()
 
     if (base === 'help') {
       HELP_TEXT.split('\n').forEach(l => addLine('output', l))
@@ -155,115 +189,93 @@ export default function TerminalPage() {
       return
     }
 
+    // ── tasks ─── rewired to /api/kanban (real DDB, no dead /api/tasks calls)
     if (base === 'tasks') {
       if (sub === 'list') {
         setProcessing(true)
         try {
-          const res = await fetch('/api/tasks')
+          const res = await fetch('/api/kanban')
           const data = await res.json()
-          const tasks = data.tasks || []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const tasks: any[] = data.tasks ?? []
           if (tasks.length === 0) { addLine('info', 'No tasks found'); return }
           addLine('info', `${tasks.length} tasks:`)
-          tasks.forEach((t: any) => {
+          tasks.forEach(t => {
             addLine('output', `  ${t.taskId}  [${t.status}]  [${t.priority}]  ${t.title}`)
           })
-        } catch {
-          addLine('error', 'Failed to fetch tasks')
-        } finally {
-          setProcessing(false)
-        }
+        } catch { addLine('error', 'Failed to fetch tasks') }
+        finally   { setProcessing(false) }
         return
       }
 
       if (sub === 'add') {
-        const titleFromArgs = parts.slice(2).join(' ')
-        if (titleFromArgs) {
-          setProcessing(true)
-          try {
-            const res = await fetch('/api/tasks', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: titleFromArgs, priority: 'medium', description: '', status: 'queued', assignee: 'human', tags: [], source: 'manual' }),
-            })
-            const data = await res.json()
-            const taskId = data.task?.taskId || data.taskId || 'TX-???'
-            addLine('ok', `Task created: ${taskId} — "${titleFromArgs}"`)
-          } catch {
-            addLine('error', 'Failed to create task')
-          } finally {
-            setProcessing(false)
-          }
-        } else {
-          addLine('system', 'Task title:')
-          setCurrentPrompt('Title > ')
-          setMultiStep({ command: 'tasks_add', step: 1, data: {} })
-        }
-        return
-      }
-
-      if (sub === 'update' && parts[2] && parts[3]) {
+        const title = parts.slice(2).join(' ')
+        if (!title) { addLine('warn', 'Usage: tasks add <title>'); return }
         setProcessing(true)
         try {
-          const res = await fetch(`/api/tasks/${parts[2]}`, {
-            method: 'PUT',
+          const res = await fetch('/api/kanban', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: parts[3] }),
+            body: JSON.stringify({ title, status: 'triage', assignee: 'general', priority: 'normal' }),
           })
-          if (res.ok) {
-            addLine('ok', `Task ${parts[2]} updated → ${parts[3]}`)
-          } else {
-            addLine('error', `Failed to update task ${parts[2]}`)
-          }
-        } catch {
-          addLine('error', 'API error')
-        } finally {
-          setProcessing(false)
-        }
+          const data = await res.json()
+          const taskId = data.task?.taskId ?? data.taskId ?? '???'
+          addLine('ok', `Task created: ${taskId} — "${title}"`)
+        } catch { addLine('error', 'Failed to create task') }
+        finally   { setProcessing(false) }
         return
       }
 
       if (sub === 'done' && parts[2]) {
         setProcessing(true)
         try {
-          const res = await fetch(`/api/tasks/${parts[2]}`, {
-            method: 'PUT',
+          const res = await fetch(`/api/kanban/${parts[2]}`, {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'done', completedAt: new Date().toISOString() }),
+            body: JSON.stringify({ status: 'done' }),
           })
-          if (res.ok) {
-            addLine('ok', `Task ${parts[2]} marked as done`)
-          } else {
-            addLine('error', `Task ${parts[2]} not found`)
-          }
-        } catch {
-          addLine('error', 'API error')
-        } finally {
-          setProcessing(false)
-        }
+          if (res.ok) addLine('ok', `Task ${parts[2]} marked as done`)
+          else        addLine('error', `Task ${parts[2]} not found`)
+        } catch { addLine('error', 'API error') }
+        finally   { setProcessing(false) }
         return
       }
 
-      addLine('warn', 'Usage: tasks [list|add|update|done]')
+      if (sub === 'update' && parts[2] && parts[3]) {
+        setProcessing(true)
+        try {
+          const res = await fetch(`/api/kanban/${parts[2]}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: parts[3] }),
+          })
+          if (res.ok) addLine('ok', `Task ${parts[2]} → ${parts[3]}`)
+          else        addLine('error', `Failed to update task ${parts[2]}`)
+        } catch { addLine('error', 'API error') }
+        finally   { setProcessing(false) }
+        return
+      }
+
+      addLine('warn', 'Usage: tasks [list|add <title>|done <id>|update <id> <status>]')
       return
     }
 
+    // ── memory
     if (base === 'memory') {
       if (sub === 'list') {
         setProcessing(true)
         try {
           const res = await fetch('/api/memories')
           const data = await res.json()
-          const mems = data.memories || []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mems: any[] = data.memories ?? []
           if (mems.length === 0) { addLine('info', 'No memories found'); return }
           addLine('info', `${mems.length} memories:`)
-          mems.forEach((m: any) => {
-            addLine('output', `  ${m.memoryId}  [${m.type}]  score:${Math.round((m.relevanceScore || 0) * 100)}%  ${m.title}`)
+          mems.forEach(m => {
+            addLine('output', `  ${m.memoryId}  [${m.type}]  score:${Math.round((m.relevanceScore ?? 0) * 100)}%  ${m.title}`)
           })
-        } catch {
-          addLine('error', 'Failed to fetch memories')
-        } finally {
-          setProcessing(false)
-        }
+        } catch { addLine('error', 'Failed to fetch memories') }
+        finally   { setProcessing(false) }
         return
       }
 
@@ -273,17 +285,13 @@ export default function TerminalPage() {
         try {
           const res = await fetch(`/api/memories?search=${encodeURIComponent(query)}`)
           const data = await res.json()
-          const mems = data.memories || []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mems: any[] = data.memories ?? []
           if (mems.length === 0) { addLine('info', `No results for "${query}"`); return }
           addLine('info', `${mems.length} results for "${query}":`)
-          mems.forEach((m: any) => {
-            addLine('output', `  ${m.memoryId}  [${m.type}]  ${m.title}`)
-          })
-        } catch {
-          addLine('error', 'Search failed')
-        } finally {
-          setProcessing(false)
-        }
+          mems.forEach(m => addLine('output', `  ${m.memoryId}  [${m.type}]  ${m.title}`))
+        } catch { addLine('error', 'Search failed') }
+        finally   { setProcessing(false) }
         return
       }
 
@@ -298,6 +306,7 @@ export default function TerminalPage() {
       return
     }
 
+    // ── ecs
     if (base === 'ecs') {
       if (sub === 'status') {
         setProcessing(true)
@@ -305,15 +314,12 @@ export default function TerminalPage() {
           const res = await fetch('/api/ecs/metrics')
           const data = await res.json()
           addLine('info', 'ECS Service: hermes-agent')
-          addLine('output', `  CPU:      ${data.cpu?.toFixed(1) ?? 'N/A'}%`)
-          addLine('output', `  Memory:   ${data.memory?.toFixed(1) ?? 'N/A'}%`)
-          addLine('output', `  Tasks:    ${data.taskCount ?? 'N/A'} running`)
-          addLine('output', `  Uptime:   ${data.uptime ? Math.round(data.uptime / 3600) + 'h' : 'N/A'}`)
-        } catch {
-          addLine('error', 'Failed to fetch ECS metrics')
-        } finally {
-          setProcessing(false)
-        }
+          addLine('output', `  CPU:    ${data.cpu?.toFixed(1) ?? 'N/A'}%`)
+          addLine('output', `  Memory: ${data.memory?.toFixed(1) ?? 'N/A'}%`)
+          addLine('output', `  Tasks:  ${data.taskCount ?? 'N/A'} running`)
+          addLine('output', `  Uptime: ${data.uptime ? Math.round(data.uptime / 3600) + 'h' : 'N/A'}`)
+        } catch { addLine('error', 'Failed to fetch ECS metrics') }
+        finally   { setProcessing(false) }
         return
       }
 
@@ -323,17 +329,15 @@ export default function TerminalPage() {
         try {
           const res = await fetch(`/api/ecs/logs?lines=${n}`)
           const data = await res.json()
-          const logs = data.logs || []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const logs: any[] = data.logs ?? []
           addLine('info', `Last ${logs.length} log lines:`)
-          logs.forEach((l: any) => {
+          logs.forEach(l => {
             const ts = new Date(l.timestamp).toLocaleTimeString('en-US', { hour12: false })
             addLine('output', `  [${ts}] ${l.message}`)
           })
-        } catch {
-          addLine('error', 'Failed to fetch logs')
-        } finally {
-          setProcessing(false)
-        }
+        } catch { addLine('error', 'Failed to fetch logs') }
+        finally   { setProcessing(false) }
         return
       }
 
@@ -342,17 +346,15 @@ export default function TerminalPage() {
         try {
           const res = await fetch('/api/ecs/tasks')
           const data = await res.json()
-          const tasks = data.tasks || []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const tasks: any[] = data.tasks ?? []
           if (tasks.length === 0) { addLine('info', 'No running ECS tasks'); return }
           addLine('info', `${tasks.length} running tasks:`)
-          tasks.forEach((t: any) => {
+          tasks.forEach(t => {
             addLine('output', `  ${t.taskArn?.split('/').pop()} — ${t.lastStatus} — ${t.cpu}cpu ${t.memory}MB`)
           })
-        } catch {
-          addLine('error', 'Failed to fetch ECS tasks')
-        } finally {
-          setProcessing(false)
-        }
+        } catch { addLine('error', 'Failed to fetch ECS tasks') }
+        finally   { setProcessing(false) }
         return
       }
 
@@ -360,31 +362,38 @@ export default function TerminalPage() {
       return
     }
 
+    // ── calendar
     if (base === 'calendar') {
       if (sub === 'list') {
         setProcessing(true)
         try {
           const res = await fetch('/api/calendar')
           const data = await res.json()
-          const evts = data.events || []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const evts: any[] = data.events ?? []
           if (evts.length === 0) { addLine('info', 'No calendar events found'); return }
           addLine('info', `${evts.length} events:`)
-          evts.forEach((e: any) => {
+          evts.forEach(e => {
             addLine('output', `  ${e.eventId}  [${e.type}]  ${e.cronExpression || e.scheduledAt?.slice(0, 10)}  ${e.title}`)
           })
-        } catch {
-          addLine('error', 'Failed to fetch calendar')
-        } finally {
-          setProcessing(false)
-        }
+        } catch { addLine('error', 'Failed to fetch calendar') }
+        finally   { setProcessing(false) }
         return
       }
       addLine('warn', 'Usage: calendar list')
       return
     }
 
+    // ── hermes <cmd> — forward whitelisted commands to Hermes via execute route
+    if (base === 'hermes') {
+      const hermesCmd = parts.slice(1).join(' ').trim()
+      if (!hermesCmd) { addLine('warn', 'Usage: hermes <cmd>  (e.g. hermes /kanban list)'); return }
+      await runHermesCommand(hermesCmd)
+      return
+    }
+
     addLine('error', `Unknown command: "${base}" — type "help" for available commands`)
-  }, [multiStep, addLine])
+  }, [multiStep, addLine, runHermesCommand])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -392,7 +401,7 @@ export default function TerminalPage() {
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 30%, #0d1323 80%)', zIndex: 1 }} />
       <TopAppBar breadcrumb={['Hermes', 'Terminal']} />
 
-      {/* Subheader with traffic lights */}
+      {/* Subheader */}
       <div
         className="flex items-center gap-3 px-5 py-2 shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(13,19,35,0.6)', position: 'relative', zIndex: 2 }}

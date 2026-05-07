@@ -4,73 +4,91 @@
  * Calls the Hermes dashboard REST API (localhost:9119 in the same ECS container)
  * and the kanban plugin API directly, bypassing the Slack relay.
  *
- * Phase 2 status: stub — methods throw "not configured" until HERMES_DASHBOARD_URL
- * is set (requires `hermes dashboard --no-open` added to the ECS task startup).
- * When not configured, hermesClient.ts falls back to the Slack transport automatically.
+ * Auth: The kanban plugin routes (/api/plugins/*) are unauthenticated by design.
+ * The model API (/api/model/*) requires the dashboard session token; calls that
+ * fail with 401 propagate as "not configured" so hermesClient.ts falls back to
+ * the Slack transport automatically.
  */
 
 import type { HermesTransport, ChatSendOptions } from './hermesClient.types'
 
 const DASHBOARD_URL = process.env.HERMES_DASHBOARD_URL?.replace(/\/$/, '')
-// MC → Hermes auth: same key that Hermes already uses for the reverse direction
-// (app/api/hermes/update/route.ts validates X-Hermes-Key from incoming Hermes calls).
-const HERMES_KEY    = process.env.HERMES_SECRET_KEY
+// Reserved for future use when the dashboard session-token auth is wired up.
+// Currently unused: kanban routes are unauthenticated, model routes fall back to Slack.
+const HERMES_KEY = process.env.HERMES_SECRET_KEY
 
 function authHeaders(): HeadersInit {
   return HERMES_KEY ? { 'X-Hermes-Key': HERMES_KEY } : {}
 }
 
+/** Throws "not configured" (fallback trigger) for auth/network errors.
+ *  Throws descriptive error for genuine API failures. */
+async function checkResponse(res: Response, context: string): Promise<void> {
+  if (res.ok) return
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`not configured: dashboard auth required for ${context}`)
+  }
+  const body = await res.text().catch(() => '')
+  throw new Error(`${context} failed: HTTP ${res.status} — ${body.slice(0, 200)}`)
+}
+
 export const directTransport: HermesTransport = {
   async chatSend(_opts: ChatSendOptions): Promise<string | null> {
-    // Phase 2: POST ${DASHBOARD_URL}/mc/chat with SSE streaming.
-    // The dashboard currently has no /mc/chat endpoint; this requires a gateway patch.
-    throw new Error('hermesClient.direct: chatSend not yet implemented (Phase 2)')
+    // Phase 3: Requires a streaming SSE /mc/chat endpoint on the Hermes side.
+    // Fall back to Slack until that is implemented.
+    throw new Error('hermesClient.direct: chatSend not yet implemented (Phase 3)')
   },
 
   async kanbanComplete(taskId, result, _senderName) {
     if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
     const body: Record<string, unknown> = { status: 'done' }
     if (result) body.result = result
-    await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}`, {
+    const res = await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify(body),
     })
+    await checkResponse(res, `kanbanComplete(${taskId})`)
   },
 
   async kanbanBlock(taskId, reason, _senderName) {
     if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
+    // Dashboard API uses block_reason (not reason) per plugin_api.py UpdateTaskBody
     const body: Record<string, unknown> = { status: 'blocked' }
-    if (reason) body.reason = reason
-    await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}`, {
+    if (reason) body.block_reason = reason
+    const res = await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify(body),
     })
+    await checkResponse(res, `kanbanBlock(${taskId})`)
   },
 
   async kanbanComment(taskId, text, _senderName) {
     if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
-    await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}/comments`, {
+    // Plugin API expects { body: string } per CommentBody model
+    const res = await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}/comments`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify({ body: text }),
     })
+    await checkResponse(res, `kanbanComment(${taskId})`)
   },
 
   async modelSet(model) {
     if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
-    await fetch(`${DASHBOARD_URL}/api/model/set`, {
+    // /api/model/set requires dashboard session token (401 → falls back to Slack)
+    const res = await fetch(`${DASHBOARD_URL}/api/model/set`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify({ scope: 'main', model }),
     })
+    await checkResponse(res, `modelSet(${model})`)
   },
 
-  async exec(command, _senderName) {
-    if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
-    // Phase 2: POST to a whitelisted /mc/exec endpoint (requires gateway patch).
-    // For now, flag as unimplemented so the caller falls back to Slack.
-    throw new Error(`hermesClient.direct: exec not yet implemented (Phase 2) — command: ${command}`)
+  async exec(_command, _senderName) {
+    // Phase 3: Requires a whitelisted /mc/exec endpoint on the Hermes side.
+    // Fall back to Slack until that is implemented.
+    throw new Error('hermesClient.direct: exec not yet implemented (Phase 3)')
   },
 }
