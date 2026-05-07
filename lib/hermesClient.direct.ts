@@ -77,11 +77,22 @@ export const directTransport: HermesTransport = {
 
   async modelSet(model) {
     if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
-    // /api/model/set requires dashboard session token (401 → falls back to Slack)
+    // Resolve the current provider so /api/model/set has all required fields.
+    // The /api/model/options endpoint is public (no auth needed).
+    let provider = 'openai-codex'  // safe default
+    try {
+      const optsRes = await fetch(`${DASHBOARD_URL}/api/model/options`, { headers: authHeaders() })
+      if (optsRes.ok) {
+        const optsData = await optsRes.json() as { providers?: Array<{ slug: string; is_current: boolean }> }
+        const current = optsData.providers?.find(p => p.is_current)
+        if (current) provider = current.slug
+      }
+    } catch { /* use default provider */ }
+
     const res = await fetch(`${DASHBOARD_URL}/api/model/set`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body:    JSON.stringify({ scope: 'main', model }),
+      body:    JSON.stringify({ provider, scope: 'main', model }),
     })
     await checkResponse(res, `modelSet(${model})`)
   },
