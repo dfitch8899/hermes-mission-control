@@ -77,22 +77,32 @@ export const directTransport: HermesTransport = {
 
   async modelSet(model) {
     if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
-    // Resolve the current provider so /api/model/set has all required fields.
-    // The /api/model/options endpoint is public (no auth needed).
-    let provider = 'openai-codex'  // safe default
+
+    // Step 1: resolve the current provider (required field for /api/model/set).
+    // /api/model/options needs the auth header on authenticated Hermes builds.
+    let provider = 'openai-codex'  // safe default — overridden below
     try {
-      const optsRes = await fetch(`${DASHBOARD_URL}/api/model/options`, { headers: authHeaders() })
+      const optsRes = await fetch(`${DASHBOARD_URL}/api/model/options`, {
+        headers: authHeaders(),
+        signal:  AbortSignal.timeout(5_000),
+      })
       if (optsRes.ok) {
-        const optsData = await optsRes.json() as { providers?: Array<{ slug: string; is_current: boolean }> }
+        const optsData = await optsRes.json() as {
+          providers?: Array<{ slug: string; is_current: boolean; models?: string[] }>
+        }
         const current = optsData.providers?.find(p => p.is_current)
         if (current) provider = current.slug
       }
     } catch { /* use default provider */ }
 
+    // Step 2: set the model.
+    // Do NOT send `scope` — it was a guess and Hermes 422s if it doesn't recognise it.
+    // The dashboard /model command sets globally by default.
     const res = await fetch(`${DASHBOARD_URL}/api/model/set`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body:    JSON.stringify({ provider, scope: 'main', model }),
+      body:    JSON.stringify({ provider, model }),
+      signal:  AbortSignal.timeout(5_000),
     })
     await checkResponse(res, `modelSet(${model})`)
   },

@@ -6,41 +6,137 @@ import TerminalOutput, { TerminalLine } from '@/components/terminal/TerminalOutp
 import TerminalInput from '@/components/terminal/TerminalInput'
 import { v4 as uuid } from 'uuid'
 
+// ─── Hermes bare-word commands that should be forwarded with a / prefix ─────
+// These are Hermes CLI commands the user may type without a leading /.
+const HERMES_BARE_CMDS = new Set([
+  'new', 'reset', 'stop', 'status', 'history', 'save', 'retry', 'undo',
+  'title', 'compress', 'rollback', 'snapshot', 'snap', 'branch', 'fork', 'resume', 'redraw',
+  'background', 'bg', 'btw', 'queue', 'q', 'steer', 'goal',
+  'config', 'personality', 'verbose', 'fast', 'reasoning', 'skin', 'voice',
+  'yolo', 'footer', 'busy', 'indicator', 'statusbar', 'sb',
+  'tools', 'toolsets', 'browser', 'skills', 'cron', 'curator',
+  'reload-mcp', 'reload_mcp', 'reload', 'plugins',
+  'usage', 'insights', 'platforms', 'gateway', 'debug', 'profile',
+  'gquota', 'copy', 'paste',
+  'approve', 'deny', 'sethome', 'update', 'restart', 'commands',
+])
+
+// ─── Commands handled locally (MC direct API — no Hermes relay needed) ──────
+const LOCAL_CMDS = new Set([
+  'help', 'clear', 'exit', 'quit', 'ping',
+  'model', 'kanban', 'tasks', 'memory', 'ecs', 'calendar', 'sync', 'hermes',
+])
+
 const HELP_TEXT = `
-HERMES MISSION CONTROL — Terminal v2.3
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HERMES MISSION CONTROL — Terminal v3.0
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Available commands:
-  help                              Show this help message
-  clear                             Clear terminal output
+MISSION CONTROL COMMANDS  (direct API, no Hermes relay):
 
-  model                             Show current active model
-  model list                        List all available models
-  model set <name>                  Switch active model
+  help                          Show this help message
+  clear                         Clear terminal output
+  ping                          Test direct transport connectivity to Hermes dashboard
 
-  kanban list [--status=<s>]        List tasks (status: triage/todo/ready/running/done/blocked)
-  kanban add <title>                Create a new task
-  kanban show <id>                  Show task detail + comments
-  kanban done <id> [result]         Mark task as done
-  kanban block <id> [reason]        Mark task as blocked
-  kanban assign <id> <agent>        Assign task to an agent
-  kanban comment <id> <text>        Add a comment to a task
-  kanban archive <id>               Archive a task
+  model                         Show active model
+  model list                    List all available models
+  model <name>                  Switch active model
+  model set <name>              Switch active model (explicit form)
 
-  memory list                       List all memories
-  memory search <query>             Search memories by query
-  memory add                        Add a new memory (interactive)
+  kanban list [--status=<s>]    List tasks  (status: triage/todo/ready/running/done/blocked)
+  kanban add <title>            Create a task
+  kanban create <title>         Alias for kanban add  (supports --assignee / --priority flags)
+  kanban show <id>              Show task detail + comments
+  kanban done <id> [result]     Mark task as done
+  kanban block <id> [reason]    Mark task as blocked
+  kanban unblock <id>           Unblock a task (sets status → todo)
+  kanban assign <id> <agent>    Assign to an agent
+  kanban comment <id> <text>    Add a comment
+  kanban archive <id>           Archive a task
+  kanban dispatch               Ask Hermes to dispatch pending tasks
 
-  ecs status                        Show ECS service metrics
-  ecs logs [n]                      Show last N log lines (default 20)
-  ecs tasks                         List running ECS tasks
+  memory list                   List all memories
+  memory search <query>         Search memories
+  memory add                    Add a memory (interactive)
 
-  calendar list                     List all scheduled events
+  ecs status                    ECS service metrics
+  ecs logs [n]                  Last N log lines (default 20)
+  ecs tasks                     Running ECS tasks
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  calendar list                 Scheduled events
+
+  sync                          Sync Hermes data to Mission Control
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HERMES SLASH COMMANDS  (forwarded to Hermes agent):
+
+  Session
+  /new  /reset              Start fresh conversation
+  /stop                     Interrupt current execution
+  /status                   Session details
+  /history                  Conversation record
+  /save                     Preserve current chat
+  /retry                    Resend last message
+  /undo                     Remove last exchange
+  /title [name]             Label the session
+  /compress [topic]         Condense context
+  /rollback [n]             Revert to filesystem snapshot
+  /snapshot [create|restore|prune]  Manage state checkpoints  (/snap)
+  /branch [name]            Create alternate conversation path  (/fork)
+  /resume [name]            Restore named session
+
+  Queue & Steering
+  /background <prompt>      Run task in separate session  (/bg, /btw)
+  /queue <prompt>           Buffer next input without interrupting  (/q)
+  /steer <prompt>           Inject guidance mid-execution
+  /goal <text>              Set persistent objective
+    /goal status|pause|resume|clear
+
+  Configuration
+  /config                   View current settings
+  /model [name]             Switch active model (also handled locally)
+  /personality              Choose personality overlay
+  /verbose                  Cycle tool progress display
+  /fast [normal|fast|status]  Toggle priority processing
+  /reasoning [level|show|hide]  Adjust reasoning visibility
+  /voice [on|off|tts|status]  Audio controls
+  /yolo                     Skip approval prompts
+
+  Tools & Skills
+  /tools [list|enable|disable]  Manage tool access
+  /skills                   Browse / install / audit skills
+  /plugins                  List installed plugins
+  /cron [list|add|edit|…]   Scheduled automation
+  /curator [status|run|pin|archive]  Background skill maintenance
+  /browser [connect|disconnect|status]  Chrome connection
+  /reload-mcp               Refresh MCP server config  (/reload_mcp)
+  /reload                   Reload environment variables
+
+  Information
+  /usage                    Token consumption & cost breakdown
+  /insights [days]          30-day usage analytics
+  /debug                    Shareable diagnostic report
+  /profile                  Active profile name and directory
+  /gquota                   Gemini quota progress
+  /platforms                Messaging platform status  (/gateway)
+
+  Messaging Platform
+  /approve [session|always] Authorize pending dangerous command
+  /deny                     Reject pending dangerous command
+  /restart                  Gracefully restart gateway
+
+  Dynamic
+  /<skill-name>             Invoke any installed skill
+  /help                     Show Hermes command reference
+
+  Tip: Any /command not listed above is forwarded to Hermes.
+  Bare-word forms (status, usage, debug …) also work without the /.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Use ↑/↓ arrows to navigate command history.
 `.trim()
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 type MultiStepState = {
   command: 'memory_add'
   step: number
@@ -52,10 +148,56 @@ function makeLine(type: TerminalLine['type'], content: string): TerminalLine {
   return { id: uuid(), timestamp: new Date(), type, content }
 }
 
+// ─── Argument parsing helpers ─────────────────────────────────────────────────
+
+/** Parse a command line respecting double/single-quoted strings. */
+function parseArgs(input: string): string[] {
+  const args: string[] = []
+  let current = ''
+  let inQuote = false
+  let quoteChar = ''
+  for (const ch of input) {
+    if (inQuote) {
+      if (ch === quoteChar) inQuote = false
+      else current += ch
+    } else if (ch === '"' || ch === "'") {
+      inQuote = true; quoteChar = ch
+    } else if (ch === ' ' || ch === '\t') {
+      if (current) { args.push(current); current = '' }
+    } else {
+      current += ch
+    }
+  }
+  if (current) args.push(current)
+  return args
+}
+
+/**
+ * Extract --flag=value or --flag value from an args array.
+ * Mutates the array by removing matched elements. Returns undefined if not found.
+ */
+function extractFlag(args: string[], ...flags: string[]): string | undefined {
+  for (const flag of flags) {
+    const eqIdx = args.findIndex(a => a.toLowerCase().startsWith(`${flag}=`))
+    if (eqIdx >= 0) {
+      const val = args[eqIdx].slice(flag.length + 1)
+      args.splice(eqIdx, 1)
+      return val
+    }
+    const spIdx = args.findIndex(a => a.toLowerCase() === flag)
+    if (spIdx >= 0 && spIdx < args.length - 1) {
+      const val = args[spIdx + 1]
+      args.splice(spIdx, 2)
+      return val
+    }
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function TerminalPage() {
   const [lines, setLines] = useState<TerminalLine[]>([
-    makeLine('system', 'Hermes Mission Control — Terminal v2.3'),
-    makeLine('system', 'Type "help" for available commands.'),
+    makeLine('system', 'Hermes Mission Control — Terminal v3.0'),
+    makeLine('system', 'Type "help" for available commands.  All Hermes /commands are supported.'),
     makeLine('info', 'Connected to hermes-agent cluster'),
   ])
   const [processing, setProcessing] = useState(false)
@@ -71,7 +213,7 @@ export default function TerminalPage() {
     setLines(prev => [...prev, ...newLines.map(l => makeLine(l.type, l.content))])
   }, [])
 
-  /** Update or append the streaming reply line */
+  /** Update or append the streaming reply line. */
   const setStreamLine = useCallback((text: string) => {
     setLines(prev => {
       if (streamingLineId.current) {
@@ -83,7 +225,7 @@ export default function TerminalPage() {
     })
   }, [])
 
-  // ─── SSE streaming helper (for /api/terminal/execute) ───────────────────────
+  // ─── SSE streaming helper — forwards commands to Hermes via chatSend ─────────
   const runHermesCommand = useCallback(async (command: string) => {
     setProcessing(true)
     streamingLineId.current = null
@@ -115,7 +257,7 @@ export default function TerminalPage() {
           try {
             const event = JSON.parse(line.slice(6))
             if (event.type === 'text_replace') setStreamLine(event.text)
-            else if (event.type === 'error') addLine('error', event.message)
+            else if (event.type === 'error')    addLine('error', event.message)
           } catch { /* skip malformed */ }
         }
       }
@@ -127,24 +269,25 @@ export default function TerminalPage() {
     }
   }, [addLine, setStreamLine])
 
-  // ─── Main command dispatcher ────────────────────────────────────────────────
-  const executeCommand = useCallback(async (raw: string) => {
-    const cmd = raw.trim()
+  // ─── Main command dispatcher ─────────────────────────────────────────────────
+  const executeCommand = useCallback(async (rawInput: string) => {
+    const raw = rawInput.trim()
+    if (!raw) return
 
-    // Multi-step flow (memory add only)
+    // ── Multi-step flow (memory add) ────────────────────────────────────────────
     if (multiStep?.command === 'memory_add') {
       if (multiStep.step === 1) {
-        setMultiStep({ ...multiStep, step: 2, data: { ...multiStep.data, title: cmd } })
-        addLine('system', 'Type? (context/skill/improvement):')
+        setMultiStep({ ...multiStep, step: 2, data: { ...multiStep.data, title: raw } })
+        addLine('system', 'Type? (context / skill / improvement):')
         setCurrentPrompt('Type > ')
       } else if (multiStep.step === 2) {
-        const types = ['context', 'skill', 'improvement']
-        const type = types.includes(cmd.toLowerCase()) ? cmd.toLowerCase() : 'context'
+        const validTypes = ['context', 'skill', 'improvement']
+        const type = validTypes.includes(raw.toLowerCase()) ? raw.toLowerCase() : 'context'
         setMultiStep({ ...multiStep, step: 3, data: { ...multiStep.data, type } })
-        addLine('system', 'Content (one line summary):')
+        addLine('system', 'Content (one-line summary):')
         setCurrentPrompt('Content > ')
       } else if (multiStep.step === 3) {
-        const prevData = multiStep.data as Record<string, string>
+        const prev = multiStep.data as Record<string, string>
         setMultiStep(null)
         setCurrentPrompt(undefined)
         setProcessing(true)
@@ -152,68 +295,125 @@ export default function TerminalPage() {
           const res = await fetch('/api/memories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: prevData.title ?? '', type: prevData.type ?? 'context', content: cmd, tags: [], source: 'user', relevanceScore: 0.7 }),
+            body: JSON.stringify({ title: prev.title ?? '', type: prev.type ?? 'context', content: raw, tags: [], source: 'user', relevanceScore: 0.7 }),
           })
           const data = await res.json()
-          addLine('ok', `Memory created: ${data.memory?.memoryId ?? data.memoryId ?? '???'} — "${prevData.title}" [${prevData.type}]`)
+          addLine('ok', `Memory created: ${data.memory?.memoryId ?? data.memoryId ?? '???'} — "${prev.title}" [${prev.type}]`)
         } catch { addLine('error', 'Failed to create memory') }
         finally   { setProcessing(false) }
       }
       return
     }
 
-    // Echo command
-    addLine('prompt', cmd)
+    // Echo the command
+    addLine('prompt', raw)
 
-    const parts = cmd.replace(/^\//, '').split(/\s+/)  // strip leading slash
-    const base  = parts[0].toLowerCase()
-    const sub   = parts[1]?.toLowerCase()
+    // Parse: strip leading / so /model and model both work the same
+    const stripped = raw.replace(/^\//, '')
+    const parts    = parseArgs(stripped)
+    const base     = parts[0]?.toLowerCase() ?? ''
+    const sub      = parts[1]?.toLowerCase()
 
-    // ── help / clear ────────────────────────────────────────────────────────────
-    if (base === 'help') { HELP_TEXT.split('\n').forEach(l => addLine('output', l)); return }
-    if (base === 'clear') { setLines([makeLine('system', 'Terminal cleared.')]); return }
+    // ── ping — diagnostic: test direct transport connectivity ───────────────────
+    if (base === 'ping') {
+      setProcessing(true)
+      try {
+        const res  = await fetch('/api/hermes/ping')
+        const data = await res.json()
+        addLine('info', `Transport: ${data.transport}  |  URL: ${data.dashboardUrl ?? 'not set'}`)
+        addLine('output', `  Key configured: ${data.keyConfigured ? 'yes (' + data.keyPrefix + ')' : 'NO'}`)
+        if (data.ok) {
+          addLine('ok', `✓ Hermes dashboard reachable`)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const providers: any[] = data.model?.body?.providers ?? []
+          if (providers.length) {
+            addLine('output', '  Providers:')
+            providers.forEach((p: { slug: string; is_current: boolean; current_model?: string }) => {
+              const active = p.is_current ? ' ◀ active' : ''
+              addLine('output', `    ${p.slug}${active}${p.current_model ? '  model=' + p.current_model : ''}`)
+            })
+          }
+        } else {
+          addLine('error', `✗ ${data.diagnosis}`)
+          if (data.kanban?.httpStatus !== null) {
+            addLine('output', `  Kanban probe: HTTP ${data.kanban?.httpStatus ?? 'no response'}`)
+            addLine('output', `  Model probe:  HTTP ${data.model?.httpStatus ?? 'no response'}`)
+          }
+          if (data.transport !== 'direct') {
+            addLine('warn', '→ Restart MC after updating .env.local with HERMES_TRANSPORT=direct')
+          } else if (!data.kanban?.reachable) {
+            addLine('warn', '→ Start port forward:  .\\scripts\\hermes-forward.ps1  (PowerShell)')
+          }
+        }
+      } catch { addLine('error', 'Ping request failed') }
+      finally   { setProcessing(false) }
+      return
+    }
 
-    // ── model ────────────────────────────────────────────────────────────────────
+    // ── help / clear ─────────────────────────────────────────────────────────────
+    if (base === 'help') {
+      HELP_TEXT.split('\n').forEach(l => addLine('output', l))
+      return
+    }
+    if (base === 'clear') {
+      setLines([makeLine('system', 'Terminal cleared.')])
+      return
+    }
+    if (base === 'exit' || base === 'quit') {
+      addLine('info', 'Use your browser tab to close Mission Control.')
+      return
+    }
+
+    // ── model ─────────────────────────────────────────────────────────────────────
     if (base === 'model') {
-      // model / model list → GET /api/hermes/model
-      if (!sub || sub === 'list') {
+      if (!sub) {
+        // model → show active model
         setProcessing(true)
         try {
           const res  = await fetch('/api/hermes/model')
           const data = await res.json()
-          addLine('info', `Active model: ${data.model}`)
-          if (sub === 'list' && data.options?.length) {
-            addLine('output', 'Available models:')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            data.options.forEach((o: any) => {
-              const active = o.value === data.model ? ' ◀ active' : ''
-              addLine('output', `  ${o.value.padEnd(32)} ${o.label ?? ''}${active}`)
-            })
-          }
+          addLine('info', `Active model: ${data.model ?? 'unknown'}`)
+          if (data.provider) addLine('output', `  Provider: ${data.provider}`)
         } catch { addLine('error', 'Failed to fetch model info') }
         finally   { setProcessing(false) }
         return
       }
 
-      // model set <name> → POST /api/hermes/model
-      if (sub === 'set' && parts[2]) {
-        const modelName = parts[2]
+      if (sub === 'list') {
+        // model list → list available models
         setProcessing(true)
         try {
-          const res = await fetch('/api/hermes/model', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: modelName }),
-          })
+          const res  = await fetch('/api/hermes/model')
           const data = await res.json()
-          if (res.ok) addLine('ok', `Model set to: ${data.model}`)
-          else        addLine('error', data.error ?? 'Failed to set model')
-        } catch { addLine('error', 'Failed to set model') }
+          addLine('info', `Active model: ${data.model ?? 'unknown'}`)
+          if (data.options?.length) {
+            addLine('output', 'Available models:')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            data.options.forEach((o: any) => {
+              const active = o.value === data.model ? ' ◀ active' : ''
+              addLine('output', `  ${(o.value ?? o.label ?? '').padEnd(36)} ${o.label ?? ''}${active}`)
+            })
+          }
+        } catch { addLine('error', 'Failed to fetch model list') }
         finally   { setProcessing(false) }
         return
       }
 
-      addLine('warn', 'Usage: model [list | set <name>]')
+      // model set <name>  OR  model <name>  (shorthand — same effect)
+      const modelName = sub === 'set' ? parts[2] : sub
+      if (!modelName) { addLine('warn', 'Usage: model [list | set <name> | <name>]'); return }
+      setProcessing(true)
+      try {
+        const res  = await fetch('/api/hermes/model', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ model: modelName }),
+        })
+        const data = await res.json()
+        if (res.ok) addLine('ok', `Model switched to: ${data.model ?? modelName}`)
+        else        addLine('error', data.error ?? 'Failed to set model')
+      } catch { addLine('error', 'Failed to set model') }
+      finally   { setProcessing(false) }
       return
     }
 
@@ -224,7 +424,7 @@ export default function TerminalPage() {
         const statusFlag = parts.find(p => p.startsWith('--status='))?.split('=')[1]
         setProcessing(true)
         try {
-          const url = '/api/kanban' + (statusFlag ? `?status=${statusFlag}` : '')
+          const url  = '/api/kanban' + (statusFlag ? `?status=${statusFlag}` : '')
           const res  = await fetch(url)
           const data = await res.json()
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -233,23 +433,26 @@ export default function TerminalPage() {
           addLine('info', `${tasks.length} task${tasks.length !== 1 ? 's' : ''}:`)
           tasks.forEach(t => {
             const assignee = t.assignee ? ` [${t.assignee}]` : ''
-            addLine('output', `  ${t.taskId}  [${t.status}]  [${t.priority}]${assignee}  ${t.title}`)
+            addLine('output', `  ${(t.taskId ?? '?').padEnd(16)} [${(t.status ?? '?').padEnd(8)}] [${(t.priority ?? '?').padEnd(6)}]${assignee}  ${t.title}`)
           })
         } catch { addLine('error', 'Failed to fetch tasks') }
         finally   { setProcessing(false) }
         return
       }
 
-      // kanban add <title>
-      if (sub === 'add') {
-        const title = parts.slice(2).join(' ')
+      // kanban add <title>  OR  kanban create <title> [--assignee <a>] [--priority <p>]
+      if (sub === 'add' || sub === 'create') {
+        const mutableParts = parts.slice(2)
+        const assignee = extractFlag(mutableParts, '--assignee') ?? 'general'
+        const priority = extractFlag(mutableParts, '--priority') ?? 'normal'
+        const title    = mutableParts.join(' ').trim()
         if (!title) { addLine('warn', 'Usage: kanban add <title>'); return }
         setProcessing(true)
         try {
           const res  = await fetch('/api/kanban', {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, status: 'triage', assignee: 'general', priority: 'normal' }),
+            body:    JSON.stringify({ title, status: 'triage', assignee, priority }),
           })
           const data = await res.json()
           addLine('ok', `Task created: ${data.taskId ?? '???'} — "${title}"`)
@@ -267,16 +470,22 @@ export default function TerminalPage() {
           if (!res.ok) { addLine('error', data.error ?? 'Task not found'); return }
           const t = data.task
           addLine('info', `Task: ${t.taskId}`)
-          addLine('output', `  Title:    ${t.title}`)
-          addLine('output', `  Status:   ${t.status}`)
-          addLine('output', `  Priority: ${t.priority}`)
-          addLine('output', `  Assignee: ${t.assignee}`)
-          if (t.body) addLine('output', `  Body:     ${t.body}`)
+          addLines([
+            { type: 'output', content: `  Title:    ${t.title}` },
+            { type: 'output', content: `  Status:   ${t.status}` },
+            { type: 'output', content: `  Priority: ${t.priority}` },
+            { type: 'output', content: `  Assignee: ${t.assignee ?? '—'}` },
+          ])
+          if (t.body)         addLine('output', `  Body:     ${t.body}`)
+          if (t.blockReason)  addLine('output', `  Blocked:  ${t.blockReason}`)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const comments: any[] = data.comments ?? []
           if (comments.length) {
             addLine('output', `  Comments (${comments.length}):`)
-            comments.forEach(c => addLine('output', `    [${c.ts?.slice(0, 10)}] ${c.author}: ${c.body}`))
+            comments.forEach(c => {
+              const ts = c.ts ? new Date(c.ts).toLocaleString() : '?'
+              addLine('output', `    [${ts}] ${c.author ?? 'unknown'}: ${c.body}`)
+            })
           }
         } catch { addLine('error', 'Failed to fetch task') }
         finally   { setProcessing(false) }
@@ -291,12 +500,12 @@ export default function TerminalPage() {
           const body: Record<string, string> = { status: 'done' }
           if (result) body.result = result
           const res = await fetch(`/api/kanban/${parts[2]}`, {
-            method: 'PATCH',
+            method:  'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body:    JSON.stringify(body),
           })
-          if (res.ok) addLine('ok', `Task ${parts[2]} marked as done`)
-          else        addLine('error', `Task ${parts[2]} not found`)
+          if (res.ok) addLine('ok', `Task ${parts[2]} marked as done${result ? ` — "${result}"` : ''}`)
+          else        addLine('error', `Task ${parts[2]} not found or update failed`)
         } catch { addLine('error', 'API error') }
         finally   { setProcessing(false) }
         return
@@ -310,12 +519,28 @@ export default function TerminalPage() {
           const body: Record<string, string> = { status: 'blocked' }
           if (reason) body.reason = reason
           const res = await fetch(`/api/kanban/${parts[2]}`, {
-            method: 'PATCH',
+            method:  'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body:    JSON.stringify(body),
           })
           if (res.ok) addLine('ok', `Task ${parts[2]} blocked${reason ? ` — ${reason}` : ''}`)
-          else        addLine('error', `Task ${parts[2]} not found`)
+          else        addLine('error', `Task ${parts[2]} not found or update failed`)
+        } catch { addLine('error', 'API error') }
+        finally   { setProcessing(false) }
+        return
+      }
+
+      // kanban unblock <id>
+      if (sub === 'unblock' && parts[2]) {
+        setProcessing(true)
+        try {
+          const res = await fetch(`/api/kanban/${parts[2]}`, {
+            method:  'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ status: 'todo' }),
+          })
+          if (res.ok) addLine('ok', `Task ${parts[2]} unblocked (status → todo)`)
+          else        addLine('error', `Task ${parts[2]} not found or update failed`)
         } catch { addLine('error', 'API error') }
         finally   { setProcessing(false) }
         return
@@ -326,9 +551,9 @@ export default function TerminalPage() {
         setProcessing(true)
         try {
           const res = await fetch(`/api/kanban/${parts[2]}`, {
-            method: 'PATCH',
+            method:  'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ assignee: parts[3] }),
+            body:    JSON.stringify({ assignee: parts[3] }),
           })
           if (res.ok) addLine('ok', `Task ${parts[2]} assigned to ${parts[3]}`)
           else        addLine('error', `Failed to assign task ${parts[2]}`)
@@ -343,9 +568,9 @@ export default function TerminalPage() {
         setProcessing(true)
         try {
           const res = await fetch(`/api/kanban/${parts[2]}/comments`, {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ body: text }),
+            body:    JSON.stringify({ text }),   // ← route expects { text }, not { body }
           })
           if (res.ok) addLine('ok', `Comment added to ${parts[2]}`)
           else        addLine('error', `Failed to add comment to ${parts[2]}`)
@@ -359,9 +584,9 @@ export default function TerminalPage() {
         setProcessing(true)
         try {
           const res = await fetch(`/api/kanban/${parts[2]}`, {
-            method: 'PATCH',
+            method:  'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ archived: true }),
+            body:    JSON.stringify({ archived: true }),
           })
           if (res.ok) addLine('ok', `Task ${parts[2]} archived`)
           else        addLine('error', `Task ${parts[2]} not found`)
@@ -370,20 +595,25 @@ export default function TerminalPage() {
         return
       }
 
-      addLine('warn', 'Usage: kanban [list | add <title> | show <id> | done <id> | block <id> | assign <id> <agent> | comment <id> <text> | archive <id>]')
+      // kanban dispatch → forward to Hermes (assigns pending tasks to agents)
+      if (sub === 'dispatch') {
+        await runHermesCommand('/kanban dispatch')
+        return
+      }
+
+      addLine('warn', 'Usage: kanban [list | add <title> | create <title> | show <id> | done <id> | block <id> | unblock <id> | assign <id> <agent> | comment <id> <text> | archive <id> | dispatch]')
       return
     }
 
-    // ── tasks → alias for kanban ──────────────────────────────────────────────
+    // ── tasks → alias for kanban ──────────────────────────────────────────────────
     if (base === 'tasks') {
-      // Remap "tasks <sub>" to "kanban <sub>" for backwards compat
       const remapped = ['kanban', ...parts.slice(1)].join(' ')
       addLine('info', `(routing to: ${remapped})`)
       await executeCommand(remapped)
       return
     }
 
-    // ── memory ───────────────────────────────────────────────────────────────────
+    // ── memory ────────────────────────────────────────────────────────────────────
     if (base === 'memory') {
       if (sub === 'list') {
         setProcessing(true)
@@ -393,8 +623,11 @@ export default function TerminalPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const mems: any[] = data.memories ?? []
           if (!mems.length) { addLine('info', 'No memories found'); return }
-          addLine('info', `${mems.length} memories:`)
-          mems.forEach(m => addLine('output', `  ${m.memoryId}  [${m.type}]  score:${Math.round((m.relevanceScore ?? 0) * 100)}%  ${m.title}`))
+          addLine('info', `${mems.length} memor${mems.length !== 1 ? 'ies' : 'y'}:`)
+          mems.forEach(m => {
+            const score = Math.round((m.relevanceScore ?? 0) * 100)
+            addLine('output', `  ${(m.memoryId ?? '?').padEnd(20)} [${(m.type ?? '?').padEnd(12)}] ${score}%  ${m.title}`)
+          })
         } catch { addLine('error', 'Failed to fetch memories') }
         finally   { setProcessing(false) }
         return
@@ -408,8 +641,8 @@ export default function TerminalPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const mems: any[] = data.memories ?? []
           if (!mems.length) { addLine('info', `No results for "${query}"`); return }
-          addLine('info', `${mems.length} results:`)
-          mems.forEach(m => addLine('output', `  ${m.memoryId}  [${m.type}]  ${m.title}`))
+          addLine('info', `${mems.length} result${mems.length !== 1 ? 's' : ''} for "${query}":`)
+          mems.forEach(m => addLine('output', `  ${(m.memoryId ?? '?').padEnd(20)} [${m.type ?? '?'}]  ${m.title}`))
         } catch { addLine('error', 'Search failed') }
         finally   { setProcessing(false) }
         return
@@ -424,7 +657,7 @@ export default function TerminalPage() {
       return
     }
 
-    // ── ecs ───────────────────────────────────────────────────────────────────────
+    // ── ecs ────────────────────────────────────────────────────────────────────────
     if (base === 'ecs') {
       if (sub === 'status') {
         setProcessing(true)
@@ -450,7 +683,7 @@ export default function TerminalPage() {
           const data = await res.json()
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const logs: any[] = data.logs ?? []
-          addLine('info', `Last ${logs.length} log lines:`)
+          addLine('info', `Last ${logs.length} log line${logs.length !== 1 ? 's' : ''}:`)
           logs.forEach(l => {
             const ts = new Date(l.timestamp).toLocaleTimeString('en-US', { hour12: false })
             addLine('output', `  [${ts}] ${l.message}`)
@@ -467,7 +700,7 @@ export default function TerminalPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const tasks: any[] = data.tasks ?? []
           if (!tasks.length) { addLine('info', 'No running ECS tasks'); return }
-          addLine('info', `${tasks.length} running tasks:`)
+          addLine('info', `${tasks.length} running task${tasks.length !== 1 ? 's' : ''}:`)
           tasks.forEach(t => addLine('output', `  ${t.taskArn?.split('/').pop()} — ${t.lastStatus} — ${t.cpu}cpu ${t.memory}MB`))
         } catch { addLine('error', 'Failed to fetch ECS tasks') }
         finally   { setProcessing(false) }
@@ -477,9 +710,9 @@ export default function TerminalPage() {
       return
     }
 
-    // ── calendar ──────────────────────────────────────────────────────────────────
+    // ── calendar ───────────────────────────────────────────────────────────────────
     if (base === 'calendar') {
-      if (sub === 'list') {
+      if (!sub || sub === 'list') {
         setProcessing(true)
         try {
           const res  = await fetch('/api/calendar')
@@ -487,7 +720,7 @@ export default function TerminalPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const evts: any[] = data.events ?? []
           if (!evts.length) { addLine('info', 'No calendar events found'); return }
-          addLine('info', `${evts.length} events:`)
+          addLine('info', `${evts.length} event${evts.length !== 1 ? 's' : ''}:`)
           evts.forEach(e => addLine('output', `  ${e.eventId}  [${e.type}]  ${e.cronExpression || e.scheduledAt?.slice(0, 10)}  ${e.title}`))
         } catch { addLine('error', 'Failed to fetch calendar') }
         finally   { setProcessing(false) }
@@ -497,15 +730,54 @@ export default function TerminalPage() {
       return
     }
 
-    // ── hermes <cmd> — forward whitelisted commands via SSE ───────────────────
+    // ── sync ───────────────────────────────────────────────────────────────────────
+    if (base === 'sync') {
+      setProcessing(true)
+      addLine('info', '⏳ Syncing Hermes data to Mission Control...')
+      try {
+        const res  = await fetch('/api/hermes/sync', { method: 'POST' })
+        const data = await res.json()
+        if (data.synced) {
+          addLine('ok', `Sync complete — ${data.skillCount} skill${data.skillCount !== 1 ? 's' : ''}, ${data.memoryCount} memor${data.memoryCount !== 1 ? 'ies' : 'y'}`)
+          if (data.lastSyncedAt) addLine('output', `  Last synced: ${new Date(data.lastSyncedAt).toLocaleString()}`)
+        } else {
+          addLine('warn', 'Sync triggered — no update detected within timeout (Hermes may still be running it)')
+        }
+      } catch { addLine('error', 'Sync request failed') }
+      finally   { setProcessing(false) }
+      return
+    }
+
+    // ── hermes <cmd> — legacy prefix, still supported ──────────────────────────────
     if (base === 'hermes') {
       const hermesCmd = parts.slice(1).join(' ').trim()
-      if (!hermesCmd) { addLine('warn', 'Usage: hermes <cmd>  (e.g. hermes /kanban list)'); return }
-      await runHermesCommand(hermesCmd)
+      if (!hermesCmd) {
+        addLine('warn', 'Usage: hermes <cmd>  (tip: you can also type /<cmd> directly)')
+        return
+      }
+      // Ensure slash prefix for Hermes to interpret as a command
+      const withSlash = hermesCmd.startsWith('/') ? hermesCmd : `/${hermesCmd}`
+      await runHermesCommand(withSlash)
+      return
+    }
+
+    // ── Hermes bare-word commands (no / required) ──────────────────────────────────
+    // e.g. "status", "usage", "debug", "background <prompt>", etc.
+    if (HERMES_BARE_CMDS.has(base)) {
+      // Forward with / prefix so Hermes interprets it as a slash command
+      await runHermesCommand(`/${stripped}`)
+      return
+    }
+
+    // ── Any remaining /cmd (slash commands not handled above) → forward to Hermes ──
+    // e.g. /status, /usage, /skills, /<skill-name>, etc.
+    if (raw.startsWith('/') && !LOCAL_CMDS.has(base)) {
+      await runHermesCommand(raw)
       return
     }
 
     addLine('error', `Unknown command: "${parts[0]}" — type "help" for available commands`)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [multiStep, addLine, addLines, runHermesCommand])
 
   return (

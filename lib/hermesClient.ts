@@ -1,20 +1,24 @@
 /**
  * Hermes command client — the single entry point for Mission Control → Hermes communication.
  *
- * Transport selection (via HERMES_TRANSPORT env var):
- *   "direct"  — calls the Hermes dashboard REST API on localhost (Phase 2+).
- *               Falls back to Slack transport if HERMES_DASHBOARD_URL is not set
- *               or if the direct call throws a "not configured / not implemented" error.
- *   "slack"   — (default) routes via the Slack channel relay (legacy path, always available).
+ * TRANSPORT POLICY
+ * ─────────────────────────────────────────────────────────────────────
+ *  chatSend / exec   — interactive ops that need a streamed reply.
+ *                      Try direct first when configured; fall back to
+ *                      the Slack relay so the terminal always gets a
+ *                      response while the direct chat endpoint (Phase 3)
+ *                      is still pending.
  *
- * To enable direct transport (Phase 2+):
- *   1. Add `hermes dashboard --no-open &` to the ECS task-def startup command.
- *   2. Set HERMES_DASHBOARD_URL=http://127.0.0.1:9119 in the ECS environment.
- *   3. Set HERMES_TRANSPORT=direct in the ECS environment.
+ *  kanbanComplete / kanbanBlock / kanbanComment / modelSet
+ *                    — silent write ops. Try direct when configured;
+ *                      silent-fail otherwise. NEVER fall back to Slack —
+ *                      these must not pollute the shared Slack channel.
+ * ─────────────────────────────────────────────────────────────────────
  *
- * Usage:
- *   import { hermesClient } from '@/lib/hermesClient'
- *   await hermesClient.kanbanComment(taskId, text, senderName)
+ * To enable direct transport set these in Mission Control's OWN environment
+ * (not just in the hermes-agent container):
+ *   HERMES_TRANSPORT=direct
+ *   HERMES_DASHBOARD_URL=http://<hermes-host>:9119
  */
 
 import type { HermesTransport, ChatSendOptions, PermissionRequest } from './hermesClient.types'
@@ -24,40 +28,64 @@ import { directTransport } from './hermesClient.direct'
 // Re-export types so callers can import everything from one place.
 export type { HermesTransport, ChatSendOptions, PermissionRequest }
 
-const TRANSPORT = process.env.HERMES_TRANSPORT ?? 'slack'
-const USE_DIRECT = TRANSPORT === 'direct' && !!process.env.HERMES_DASHBOARD_URL
+const USE_DIRECT = process.env.HERMES_TRANSPORT === 'direct' && !!process.env.HERMES_DASHBOARD_URL
 
 /**
- * Build a transport that tries `primary` and, on a "not configured / not implemented"
- * error, transparently falls back to `fallback`.
+ * chatSend / exec: try direct, fall back to Slack on "not configured / not
+ * yet implemented" signals. Real errors are re-thrown.
  */
-function withFallback(primary: HermesTransport, fallback: HermesTransport): HermesTransport {
-  const wrap = <K extends keyof HermesTransport>(method: K): HermesTransport[K] => {
-    return (async (...args: Parameters<HermesTransport[K]>) => {
+function withSlackFallback<K extends 'chatSend' | 'exec'>(method: K): HermesTransport[K] {
+  return (async (...args: Parameters<HermesTransport[K]>) => {
+    if (USE_DIRECT) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return await (primary[method] as (...a: any[]) => Promise<unknown>)(...args)
+        return await (directTransport[method] as (...a: any[]) => Promise<unknown>)(...args)
       } catch (err) {
         const msg = (err as Error).message ?? ''
-        if (msg.includes('not configured') || msg.includes('not yet implemented') || msg.includes('HERMES_DASHBOARD_URL not set')) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return await (fallback[method] as (...a: any[]) => Promise<unknown>)(...args)
+        if (
+          !msg.includes('not configured') &&
+          !msg.includes('not yet implemented') &&
+          !msg.includes('HERMES_DASHBOARD_URL not set')
+        ) {
+          throw err  // Real API error — propagate
         }
-        throw err
+        // Phase 3 endpoint not yet live → fall through to Slack relay
       }
-    }) as HermesTransport[K]
-  }
-
-  return {
-    chatSend:       wrap('chatSend'),
-    kanbanComplete: wrap('kanbanComplete'),
-    kanbanBlock:    wrap('kanbanBlock'),
-    kanbanComment:  wrap('kanbanComment'),
-    modelSet:       wrap('modelSet'),
-    exec:           wrap('exec'),
-  }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (slackTransport[method] as (...a: any[]) => Promise<unknown>)(...args)
+  }) as HermesTransport[K]
 }
 
-export const hermesClient: HermesTransport = USE_DIRECT
-  ? withFallback(directTransport, slackTransport)
-  : slackTransport
+/**
+ * kanban* / modelSet: try direct when configured; NEVER fall back to Slack.
+ * Sending these write ops to Slack would pollute the shared channel and
+ * cause the Hermes agent to double-apply mutations.
+ */
+function directOnly<K extends Exclude<keyof HermesTransport, 'chatSend' | 'exec'>>(
+  method: K,
+): HermesTransport[K] {
+  return (async (...args: Parameters<HermesTransport[K]>) => {
+    if (!USE_DIRECT) {
+      // Not configured — warn once per method to help diagnose misconfiguration.
+      console.warn(`[hermesClient] directOnly(${method}): direct transport not active (HERMES_TRANSPORT=${process.env.HERMES_TRANSPORT ?? 'unset'}, HERMES_DASHBOARD_URL=${process.env.HERMES_DASHBOARD_URL ?? 'unset'}). Op dropped.`)
+      return
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await (directTransport[method] as (...a: any[]) => Promise<unknown>)(...args)
+    } catch (err) {
+      // Log so server console shows the real failure; do NOT Slack.
+      console.warn(`[hermesClient] directOnly(${method}) failed:`, (err as Error).message ?? err)
+    }
+  }) as HermesTransport[K]
+}
+
+export const hermesClient: HermesTransport = {
+  chatSend:       withSlackFallback('chatSend'),
+  exec:           withSlackFallback('exec'),
+  kanbanComplete: directOnly('kanbanComplete'),
+  kanbanBlock:    directOnly('kanbanBlock'),
+  kanbanComment:  directOnly('kanbanComment'),
+  modelSet:       directOnly('modelSet'),
+}

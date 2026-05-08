@@ -11,25 +11,48 @@
  *   { type: 'done' }
  *   { type: 'error',        message: string }
  *
- * hermesClient.chatSend() currently uses the Slack relay while the direct
- * dashboard chat endpoint is not yet implemented (Phase 3 server-side).
+ * Allowed commands:
+ *   - Any Hermes slash command (/new, /status, /model, /kanban, /usage, etc.)
+ *   - Bare-word equivalents without the leading slash
  *
- * Whitelisted prefixes — the route deliberately does NOT expose a raw shell:
- *   /model, /kanban, /profiles, /help, /tasks
+ * This endpoint does NOT expose a raw shell — it only sends chat messages to
+ * the Hermes agent, which interprets them as slash commands.
  */
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { hermesClient } from '@/lib/hermesClient'
 
-const ALLOWED_PREFIXES = [
-  '/model', '/kanban', '/profiles', '/help', '/tasks',
-  'model ', 'kanban ', 'profiles ', 'tasks ',
-]
+// Complete set of Hermes CLI slash commands (from docs/reference/slash-commands).
+// Any command whose base matches this set is allowed, with or without the leading /.
+const HERMES_COMMANDS = new Set([
+  // Session management
+  'new', 'reset', 'clear', 'stop', 'status', 'history', 'save', 'retry', 'undo',
+  'title', 'compress', 'rollback', 'snapshot', 'snap', 'branch', 'fork', 'resume', 'redraw',
+  // Queue / steering
+  'background', 'bg', 'btw', 'queue', 'q', 'steer', 'goal',
+  // Configuration
+  'config', 'model', 'personality', 'verbose', 'fast', 'reasoning', 'skin', 'voice',
+  'yolo', 'footer', 'busy', 'indicator', 'statusbar', 'sb',
+  // Tools & skills
+  'tools', 'toolsets', 'browser', 'skills', 'cron', 'curator',
+  'reload-mcp', 'reload_mcp', 'reload', 'plugins',
+  // Information
+  'help', 'usage', 'insights', 'platforms', 'gateway', 'debug', 'profile',
+  'gquota', 'copy', 'paste', 'image',
+  // Kanban / tasks / profiles
+  'kanban', 'tasks', 'profiles',
+  // Messaging-platform-only (allowed so terminal mirrors full Hermes surface)
+  'approve', 'deny', 'sethome', 'update', 'restart', 'commands',
+  // Exit aliases
+  'quit', 'exit',
+])
 
 function isAllowed(command: string): boolean {
   const cmd = command.trim().toLowerCase()
-  return ALLOWED_PREFIXES.some(p => cmd.startsWith(p))
+  // Strip leading slash (if any) and grab the first word
+  const base = cmd.replace(/^\//, '').split(/\s+/)[0]
+  return HERMES_COMMANDS.has(base)
 }
 
 export async function POST(req: NextRequest) {
@@ -40,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   if (!isAllowed(command)) {
     return new Response(
-      JSON.stringify({ error: 'Command not allowed. Permitted: /kanban, /model, /profiles, /tasks' }),
+      JSON.stringify({ error: `Command not allowed: "${command.trim().split(/\s+/)[0]}". Type /help for available commands.` }),
       { status: 400 },
     )
   }
