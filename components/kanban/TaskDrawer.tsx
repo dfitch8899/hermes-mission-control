@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { X, MessageSquare, Send, Archive, Bot, Play, Clock3, Workflow, FileText } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { X, MessageSquare, Send, Archive, Bot, Play, Clock3, Workflow, FileText, Link2 } from 'lucide-react'
 import type { Agent } from '@/types/agent'
 import type { KanbanBackend, KanbanComment, KanbanEvent, KanbanRun, KanbanTask, KanbanTaskLog } from '@/types/kanban'
 
@@ -24,6 +24,7 @@ const STATUS_LABELS: Record<string, string> = {
   running: 'Running',
   blocked: 'Blocked',
   done: 'Done',
+  archived: 'Archived',
 }
 const STATUS_COLORS: Record<string, string> = {
   triage: '#859398',
@@ -32,12 +33,16 @@ const STATUS_COLORS: Record<string, string> = {
   running: '#4ade80',
   blocked: '#f97316',
   done: '#a78bfa',
+  archived: '#64748b',
 }
 
 interface Props {
   task: KanbanTask
+  availableTasks: KanbanTask[]
   onClose: () => void
   onUpdate: (taskId: string, patch: Record<string, unknown>) => Promise<KanbanTask | undefined>
+  onTaskSync?: (task: KanbanTask) => void
+  onRefreshBoard?: () => Promise<void>
   onLaunchInChat?: (task: KanbanTask) => void
 }
 
@@ -89,7 +94,7 @@ function summarizeEvent(event: KanbanEvent) {
   }
 }
 
-export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: Props) {
+export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, onTaskSync, onRefreshBoard, onLaunchInChat }: Props) {
   const [currentTask, setCurrentTask] = useState<KanbanTask>(task)
   const [comments, setComments] = useState<KanbanComment[]>([])
   const [events, setEvents] = useState<KanbanEvent[]>([])
@@ -103,36 +108,47 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
   const [backend, setBackend] = useState<KanbanBackend>('legacy')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgent, setSelectedAgent] = useState(task.assignee)
+  const [newParentId, setNewParentId] = useState('')
+  const [newChildId, setNewChildId] = useState('')
+  const refreshSeqRef = useRef(0)
 
   useEffect(() => { setCurrentTask(task) }, [task])
   useEffect(() => { setSelectedAgent(currentTask.assignee) }, [currentTask.assignee])
 
-  useEffect(() => {
-    let cancelled = false
-    const boardParam = task.boardSlug ? `?board=${encodeURIComponent(task.boardSlug)}` : ''
+  const boardParam = currentTask.boardSlug ? `?board=${encodeURIComponent(currentTask.boardSlug)}` : ''
 
-    Promise.all([
-      fetch(`/api/kanban/${task.taskId}${boardParam}`).then(async response => ({ ok: response.ok, data: await response.json().catch(() => null) })),
+  const refreshDetail = async () => {
+    const refreshSeq = ++refreshSeqRef.current
+    const [taskResult, agentResult] = await Promise.all([
+      fetch(`/api/kanban/${currentTask.taskId}${boardParam}`).then(async response => ({ ok: response.ok, data: await response.json().catch(() => null) })),
       fetch('/api/agents').then(async response => ({ ok: response.ok, data: await response.json().catch(() => null) })),
-    ]).then(([taskResult, agentResult]) => {
-      if (cancelled) return
-      if (taskResult.ok && taskResult.data) {
-        const data = taskResult.data as TaskDetailResponse
-        if (data.task) setCurrentTask(data.task)
-        setComments(data.comments ?? [])
-        setEvents((data.events ?? []).slice().sort((a, b) => b.ts.localeCompare(a.ts)))
-        setRuns((data.runs ?? []).slice().sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? '')))
-        setCanDispatch(Boolean(data.canDispatch))
-        setCanLaunchInChat(Boolean(data.canLaunchInChat) && Boolean(onLaunchInChat))
-        setBackend(data.backend === 'native' ? 'native' : 'legacy')
-        setLog(data.log ?? { exists: false, content: '', truncated: false })
-      }
-      if (agentResult.ok && agentResult.data?.agents) {
-        setAgents(agentResult.data.agents as Agent[])
-      }
-    }).catch(() => {})
+    ])
+    if (refreshSeq !== refreshSeqRef.current) return undefined
 
-    return () => { cancelled = true }
+    let updatedTask: KanbanTask | undefined
+    if (taskResult.ok && taskResult.data) {
+      const data = taskResult.data as TaskDetailResponse
+      if (data.task) {
+        updatedTask = data.task
+        setCurrentTask(data.task)
+        onTaskSync?.(data.task)
+      }
+      setComments(data.comments ?? [])
+      setEvents((data.events ?? []).slice().sort((a, b) => b.ts.localeCompare(a.ts)))
+      setRuns((data.runs ?? []).slice().sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? '')))
+      setCanDispatch(Boolean(data.canDispatch))
+      setCanLaunchInChat(Boolean(data.canLaunchInChat) && Boolean(onLaunchInChat))
+      setBackend(data.backend === 'native' ? 'native' : 'legacy')
+      setLog(data.log ?? { exists: false, content: '', truncated: false })
+    }
+    if (agentResult.ok && agentResult.data?.agents) {
+      setAgents(agentResult.data.agents as Agent[])
+    }
+    return updatedTask
+  }
+
+  useEffect(() => {
+    void refreshDetail().catch(() => {})
   }, [task.taskId, task.boardSlug, onLaunchInChat])
 
   useEffect(() => {
@@ -141,14 +157,14 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const boardParam = currentTask.boardSlug ? `?board=${encodeURIComponent(currentTask.boardSlug)}` : ''
-  const agentColor = AGENT_COLORS[currentTask.assignee] ?? '#3cd7ff'
-  const agentIcon = AGENT_ICONS[currentTask.assignee] ?? '✨'
+  const assigneeLabel = currentTask.assignee || 'unassigned'
+  const agentColor = currentTask.assignee ? (AGENT_COLORS[currentTask.assignee] ?? '#3cd7ff') : '#859398'
+  const agentIcon = currentTask.assignee ? (AGENT_ICONS[currentTask.assignee] ?? '✨') : '⊘'
   const statusColor = STATUS_COLORS[currentTask.status] ?? '#859398'
 
   const dispatchHint = useMemo(() => {
     if (backend !== 'native') return null
-    if (currentTask.archivedAt || currentTask.status === 'done') return 'Finished tasks cannot be dispatched.'
+    if (currentTask.archivedAt || currentTask.status === 'done' || currentTask.status === 'archived') return 'Finished tasks cannot be dispatched.'
     if (currentTask.status === 'running') return 'This task is already running.'
     if (!currentTask.assignee) return 'Assign this task before dispatching.'
     if (currentTask.status === 'triage') return 'Move the task out of triage before dispatching.'
@@ -167,15 +183,9 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
         body: JSON.stringify({ text }),
       })
       if (!response.ok) throw new Error(`comment failed: ${response.status}`)
-      const optimistic = {
-        commentId: Date.now().toString(),
-        body: text,
-        author: 'Mission Control',
-        ts: new Date().toISOString(),
-      }
       setCommentText('')
-      setComments(prev => [...prev, optimistic])
-      setCurrentTask(prev => ({ ...prev, commentCount: prev.commentCount + 1, updatedAt: optimistic.ts }))
+      await refreshDetail()
+      await onRefreshBoard?.()
     } finally {
       setSendingComment(false)
     }
@@ -198,14 +208,8 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
     const previousAgent = currentTask.assignee
     setSelectedAgent(nextAgent)
     try {
-      const updated = await applyUpdate({ assignee: nextAgent })
-      if (updated) {
-        setCanDispatch(
-          backend === 'native'
-          && Boolean(nextAgent)
-          && ['ready', 'todo', 'blocked'].includes(updated.nativeStatus ?? updated.status),
-        )
-      }
+      await applyUpdate({ assignee: nextAgent })
+      await refreshDetail()
     } catch {
       setSelectedAgent(previousAgent)
     }
@@ -217,18 +221,40 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
     try {
       const response = await fetch(`/api/kanban/${currentTask.taskId}/dispatch${boardParam}`, { method: 'POST' })
       if (!response.ok) throw new Error(`dispatch failed: ${response.status}`)
-      const data = await response.json().catch(() => null) as { task?: KanbanTask } | null
-      if (data?.task) {
-        setCurrentTask(prev => ({ ...prev, ...data.task }))
-        setCanDispatch(false)
-      }
+      await refreshDetail()
+      await onRefreshBoard?.()
     } finally {
       setDispatching(false)
     }
   }
 
-  const showDispatch = backend === 'native' && canDispatch && currentTask.status !== 'done' && !currentTask.archivedAt
-  const showChatLaunch = backend !== 'native' && canLaunchInChat && currentTask.status !== 'done' && !currentTask.archivedAt
+  const addLink = async (parentId: string, childId: string) => {
+    const response = await fetch(`/api/kanban/links${boardParam}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentId, childId }),
+    })
+    if (!response.ok) throw new Error(`link failed: ${response.status}`)
+    await refreshDetail()
+    await onRefreshBoard?.()
+  }
+
+  const removeLink = async (parentId: string, childId: string) => {
+    const params = new URLSearchParams()
+    if (currentTask.boardSlug) params.set('board', currentTask.boardSlug)
+    params.set('parentId', parentId)
+    params.set('childId', childId)
+    const response = await fetch(`/api/kanban/links?${params.toString()}`, { method: 'DELETE' })
+    if (!response.ok) throw new Error(`unlink failed: ${response.status}`)
+    await refreshDetail()
+    await onRefreshBoard?.()
+  }
+
+  const showDispatch = backend === 'native' && canDispatch && currentTask.status !== 'done' && currentTask.status !== 'archived' && !currentTask.archivedAt
+  const showChatLaunch = backend !== 'native' && canLaunchInChat && currentTask.status !== 'done' && currentTask.status !== 'archived' && !currentTask.archivedAt
+
+  const parentCandidates = availableTasks.filter(candidate => candidate.taskId !== currentTask.taskId && !currentTask.parentIds.includes(candidate.taskId))
+  const childCandidates = availableTasks.filter(candidate => candidate.taskId !== currentTask.taskId && !currentTask.childIds.includes(candidate.taskId))
 
   const inputBase = {
     background: 'rgba(255,255,255,0.04)',
@@ -244,7 +270,7 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
     <>
       <div className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
 
-      <div className="fixed right-0 top-0 bottom-0 z-50 flex flex-col overflow-hidden" style={{ width: 460, background: '#0d1323', borderLeft: '1px solid rgba(255,255,255,0.09)', boxShadow: '-16px 0 60px rgba(0,0,0,0.5)' }}>
+      <div className="fixed right-0 top-0 bottom-0 z-50 flex flex-col overflow-hidden" style={{ width: 480, background: '#0d1323', borderLeft: '1px solid rgba(255,255,255,0.09)', boxShadow: '-16px 0 60px rgba(0,0,0,0.5)' }}>
         <div className="flex items-start justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex-1 pr-4">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -252,7 +278,7 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
                 {STATUS_LABELS[currentTask.status] ?? currentTask.status}
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full" style={{ background: `${agentColor}12`, color: agentColor }}>
-                {agentIcon} {currentTask.assignee}
+                {agentIcon} {assigneeLabel}
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full uppercase" style={{ background: 'rgba(255,255,255,0.05)', color: backend === 'native' ? '#5df6e0' : '#859398' }}>
                 {backend}
@@ -265,7 +291,7 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
             </div>
             <h2 className="text-sm font-semibold leading-snug" style={{ color: '#dde2f9' }}>{currentTask.title}</h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded transition-colors" style={{ color: '#859398' }}>
+          <button aria-label="Close task drawer" title="Close task drawer" onClick={onClose} className="p-1 rounded transition-colors" style={{ color: '#859398' }}>
             <X size={16} />
           </button>
         </div>
@@ -275,17 +301,6 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
             <div>
               <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }}>Description</div>
               <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'rgba(221,226,249,0.7)' }}>{currentTask.body}</p>
-            </div>
-          )}
-
-          {currentTask.tags && currentTask.tags.length > 0 && (
-            <div>
-              <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }}>Tags</div>
-              <div className="flex flex-wrap gap-1.5">
-                {currentTask.tags.map(tag => (
-                  <span key={tag} className="text-[10px] px-2 py-0.5 rounded-md font-mono" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#859398' }}>{tag}</span>
-                ))}
-              </div>
             </div>
           )}
 
@@ -322,9 +337,14 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
                 </div>
               )}
               {showChatLaunch && (
-                <button onClick={() => onLaunchInChat?.(currentTask)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-mono font-semibold transition-all" style={{ background: 'linear-gradient(135deg, rgba(60,215,255,0.15), rgba(93,246,224,0.15))', border: '1px solid rgba(93,246,224,0.3)', color: '#5df6e0' }}>
-                  <Bot size={14} /> Carry Out with Hermes
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button onClick={() => onLaunchInChat?.(currentTask)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-mono font-semibold transition-all" style={{ background: 'linear-gradient(135deg, rgba(60,215,255,0.15), rgba(93,246,224,0.15))', border: '1px solid rgba(93,246,224,0.3)', color: '#5df6e0' }}>
+                    <Bot size={14} /> Open Manual Hermes Chat
+                  </button>
+                  <div className="text-[10px] font-mono" style={{ color: '#859398' }}>
+                    Legacy boards launch a linked chat session only. The task stays in its current lifecycle state until someone explicitly marks it done or blocked.
+                  </div>
+                </div>
               )}
               {!showDispatch && !showChatLaunch && dispatchHint && (
                 <div className="text-[11px] leading-relaxed rounded-xl p-3 mt-0" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#859398' }}>
@@ -337,12 +357,12 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
           <div>
             <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }}>Actions</div>
             <div className="flex flex-wrap gap-2">
-              {currentTask.status !== 'done' && (
+              {currentTask.status !== 'done' && currentTask.status !== 'archived' && (
                 <button onClick={() => void applyUpdate({ status: 'done' })} className="px-3 py-1.5 rounded-lg text-[11px] font-mono font-medium transition-all" style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
                   ✓ Mark Done
                 </button>
               )}
-              {currentTask.status !== 'blocked' && currentTask.status !== 'done' && (
+              {currentTask.status !== 'blocked' && currentTask.status !== 'done' && currentTask.status !== 'archived' && (
                 <button onClick={() => void applyUpdate({ status: 'blocked', reason: 'blocked from UI' })} className="px-3 py-1.5 rounded-lg text-[11px] font-mono font-medium transition-all" style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.3)', color: '#f97316' }}>
                   ⊘ Block
                 </button>
@@ -352,7 +372,7 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
                   ↑ Unblock
                 </button>
               )}
-              {!currentTask.archivedAt && (
+              {!currentTask.archivedAt && currentTask.status !== 'archived' && (
                 <button onClick={() => void applyUpdate({ archived: true })} className="px-3 py-1.5 rounded-lg text-[11px] font-mono font-medium transition-all flex items-center gap-1" style={{ background: 'rgba(133,147,152,0.08)', border: '1px solid rgba(133,147,152,0.2)', color: '#859398' }}>
                   <Archive size={11} /> Archive
                 </button>
@@ -363,10 +383,60 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
           <div>
             <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }}>Reassign</div>
             <select value={selectedAgent} onChange={event => void handleAgentChange(event.target.value)} style={{ ...inputBase, width: '100%', cursor: 'pointer' }}>
+              <option value="">⊘ unassigned</option>
               {agents.map(agent => (
                 <option key={agent.agentId} value={agent.agentId}>{agent.icon} {agent.name}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <div className="text-[9px] font-mono uppercase tracking-widest mb-2 flex items-center gap-2" style={{ color: '#859398' }}>
+              <Link2 size={11} /> Dependencies
+            </div>
+            <div className="rounded-xl p-3 flex flex-col gap-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div>
+                <div className="text-[10px] font-mono mb-2" style={{ color: '#859398' }}>Parents</div>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {currentTask.parentIds.length === 0 ? <span className="text-[11px]" style={{ color: '#859398' }}>none</span> : currentTask.parentIds.map(parentId => (
+                    <button key={parentId} onClick={() => backend === 'native' ? void removeLink(parentId, currentTask.taskId) : undefined} disabled={backend !== 'native'} className="px-2 py-1 rounded-md text-[11px] font-mono disabled:opacity-60" style={{ background: 'rgba(255,255,255,0.04)', color: '#dde2f9' }}>
+                      {parentId}{backend === 'native' ? ' ×' : ''}
+                    </button>
+                  ))}
+                </div>
+                {backend === 'native' ? (
+                  <div className="flex gap-2">
+                    <select value={newParentId} onChange={event => setNewParentId(event.target.value)} style={{ ...inputBase, flex: 1 }}>
+                      <option value="">Add parent…</option>
+                      {parentCandidates.map(candidate => <option key={candidate.taskId} value={candidate.taskId}>{candidate.taskId} — {candidate.title}</option>)}
+                    </select>
+                    <button onClick={() => { if (newParentId) void addLink(newParentId, currentTask.taskId).then(() => setNewParentId('')) }} disabled={!newParentId} className="px-3 py-2 rounded-lg text-[11px] font-mono" style={{ background: 'rgba(60,215,255,0.12)', color: '#3cd7ff' }}>Add</button>
+                  </div>
+                ) : (
+                  <div className="text-[11px] leading-relaxed" style={{ color: '#859398' }}>Editing task links is available only in native kanban mode.</div>
+                )}
+              </div>
+
+              <div>
+                <div className="text-[10px] font-mono mb-2" style={{ color: '#859398' }}>Children</div>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {currentTask.childIds.length === 0 ? <span className="text-[11px]" style={{ color: '#859398' }}>none</span> : currentTask.childIds.map(childId => (
+                    <button key={childId} onClick={() => backend === 'native' ? void removeLink(currentTask.taskId, childId) : undefined} disabled={backend !== 'native'} className="px-2 py-1 rounded-md text-[11px] font-mono disabled:opacity-60" style={{ background: 'rgba(255,255,255,0.04)', color: '#dde2f9' }}>
+                      {childId}{backend === 'native' ? ' ×' : ''}
+                    </button>
+                  ))}
+                </div>
+                {backend === 'native' && (
+                  <div className="flex gap-2">
+                    <select value={newChildId} onChange={event => setNewChildId(event.target.value)} style={{ ...inputBase, flex: 1 }}>
+                      <option value="">Add child…</option>
+                      {childCandidates.map(candidate => <option key={candidate.taskId} value={candidate.taskId}>{candidate.taskId} — {candidate.title}</option>)}
+                    </select>
+                    <button onClick={() => { if (newChildId) void addLink(currentTask.taskId, newChildId).then(() => setNewChildId('')) }} disabled={!newChildId} className="px-3 py-2 rounded-lg text-[11px] font-mono" style={{ background: 'rgba(60,215,255,0.12)', color: '#3cd7ff' }}>Add</button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {currentTask.resultSummary && (
@@ -448,7 +518,7 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
             </div>
             <div className="flex gap-2">
               <textarea value={commentText} onChange={event => setCommentText(event.target.value)} placeholder="Add a comment…" rows={3} style={{ ...inputBase, flex: 1, resize: 'vertical' }} />
-              <button onClick={() => void sendComment()} disabled={!commentText.trim() || sendingComment} className="self-end p-2.5 rounded-xl transition-all disabled:opacity-60" style={{ background: 'rgba(60,215,255,0.12)', border: '1px solid rgba(60,215,255,0.26)', color: '#3cd7ff' }}>
+              <button aria-label="Send comment" title="Send comment" onClick={() => void sendComment()} disabled={!commentText.trim() || sendingComment} className="self-end p-2.5 rounded-xl transition-all disabled:opacity-60" style={{ background: 'rgba(60,215,255,0.12)', border: '1px solid rgba(60,215,255,0.26)', color: '#3cd7ff' }}>
                 <Send size={14} />
               </button>
             </div>
