@@ -8,6 +8,7 @@ interface ListTasksOptions {
   board?: string
   status?: KanbanStatus | null
   assignee?: string | null
+  tenant?: string | null
   search?: string | null
   includeArchived?: boolean
 }
@@ -22,8 +23,14 @@ interface CreateTaskInput {
   assignee?: string
   priority?: string
   workspaceType?: string
+  workspacePath?: string
   tenant?: string
   tags?: string[]
+  parentIds?: string[]
+  triage?: boolean
+  idempotencyKey?: string
+  maxRuntimeSeconds?: number
+  skills?: string[]
   board?: string
 }
 
@@ -31,9 +38,12 @@ interface UpdateTaskInput {
   status?: string
   reason?: string
   result?: string
+  summary?: string
+  metadata?: Record<string, unknown>
   assignee?: string
   archived?: boolean
   title?: string
+  body?: string
   priority?: string
 }
 
@@ -46,6 +56,10 @@ interface NativeTaskPayload {
   priority?: number | null
   tenant?: string | null
   workspace_kind?: string | null
+  workspace_path?: string | null
+  skills?: string[] | null
+  idempotency_key?: string | null
+  max_runtime_seconds?: number | null
   created_at?: number | null
   started_at?: number | null
   completed_at?: number | null
@@ -132,7 +146,6 @@ interface TaskDetailResult {
   events: KanbanEvent[]
   runs: KanbanRun[]
   canDispatch: boolean
-  canLaunchInChat: boolean
   log: KanbanTaskLog
 }
 
@@ -216,9 +229,8 @@ function nativeStatusToMissionStatus(status: string | null | undefined): KanbanS
     case 'running':
     case 'blocked':
     case 'done':
-      return status
     case 'archived':
-      return 'done'
+      return status
     default:
       return 'triage'
   }
@@ -330,11 +342,15 @@ function mapNativeTask(
     title: task.title,
     body,
     status: nativeStatusToMissionStatus(nativeStatus),
-    assignee: task.assignee || 'general',
+    assignee: task.assignee ?? '',
     priority: nativePriorityToString(task.priority),
     tenant: task.tenant ?? undefined,
     workspaceType: task.workspace_kind ?? undefined,
+    workspacePath: task.workspace_path ?? undefined,
     tags: meta.tags ?? [],
+    skills: task.skills ?? undefined,
+    idempotencyKey: task.idempotency_key ?? undefined,
+    maxRuntimeSeconds: task.max_runtime_seconds ?? undefined,
     parentIds,
     childIds,
     parentCount,
@@ -370,11 +386,15 @@ function mapLegacyTask(item: Record<string, unknown>, board: string): KanbanTask
     title: item.title as string,
     body: (item.body as string) || '',
     status: (item.status as KanbanStatus) || 'triage',
-    assignee: (item.assignee as string) || 'general',
+    assignee: (item.assignee as string) ?? '',
     priority: ((item.priority as KanbanTask['priority']) || 'normal'),
     tenant: item.tenant as string | undefined,
     workspaceType: item.workspaceType as string | undefined,
+    workspacePath: item.workspacePath as string | undefined,
     tags: (item.tags as string[]) ?? [],
+    skills: item.skills as string[] | undefined,
+    idempotencyKey: item.idempotencyKey as string | undefined,
+    maxRuntimeSeconds: item.maxRuntimeSeconds as number | undefined,
     parentIds,
     childIds,
     parentCount: parentIds.length,
@@ -405,6 +425,10 @@ function mapLegacyBoard(item: Record<string, unknown>): KanbanBoard {
     slug: item.slug as string,
     name: item.name as string,
     createdAt: (item.createdAt as string) ?? new Date().toISOString(),
+    description: (item.description as string) ?? undefined,
+    icon: (item.icon as string) ?? undefined,
+    color: (item.color as string) ?? undefined,
+    archived: Boolean(item.archived),
   }
 }
 
@@ -436,26 +460,14 @@ export class HermesKanbanAdapter {
   readonly bridgeUrl: string | null = hermesConfig.kanbanBridgeUrl
   lastBackendUsed: KanbanBackend | null = null
 
-  private canAttemptNative() {
-    return this.mode !== 'legacy' && !!this.bridgeUrl
-  }
-
-  private async withFallback<T>(nativeFn: () => Promise<T>, legacyFn: () => Promise<T>): Promise<T> {
-    if (!this.canAttemptNative()) {
-      this.lastBackendUsed = 'legacy'
-      return legacyFn()
+  private requireNative(reason = 'Mission Control /kanban now requires Hermes native kanban.') {
+    if (this.mode === 'legacy') {
+      throw new Error(`${reason} Set HERMES_KANBAN_MODE=native (or hybrid during migration).`)
     }
-
-    try {
-      const result = await nativeFn()
-      this.lastBackendUsed = 'native'
-      return result
-    } catch (error) {
-      if (this.mode === 'native') throw error
-      const result = await legacyFn()
-      this.lastBackendUsed = 'legacy'
-      return result
+    if (!this.bridgeUrl) {
+      throw new Error(`${reason} Configure HERMES_KANBAN_BRIDGE_URL or HERMES_DASHBOARD_URL.`)
     }
+    this.lastBackendUsed = 'native'
   }
 
   private buildUrl(path: string, params?: URLSearchParams) {
@@ -464,74 +476,76 @@ export class HermesKanbanAdapter {
     return url.toString()
   }
 
-  async listBoards(): Promise<KanbanBoard[]> {
-    if (this.canAttemptNative()) {
-      this.lastBackendUsed = 'native'
-      return this.listBoardsNative()
-    }
-    this.lastBackendUsed = 'legacy'
-    return this.listBoardsLegacy()
+  async listBoards(includeArchived = false): Promise<KanbanBoard[]> {
+    this.requireNative('Mission Control boards are native-only.')
+    return this.listBoardsNative(includeArchived)
   }
 
-  async createBoard(input: { name: string; slug?: string }): Promise<{ board: KanbanBoard }> {
-    if (this.canAttemptNative()) {
-      this.lastBackendUsed = 'native'
-      return this.createBoardNative(input)
-    }
-    this.lastBackendUsed = 'legacy'
-    return this.createBoardLegacy(input)
+  async createBoard(input: { name: string; slug?: string; description?: string; icon?: string; color?: string; switchToBoard?: boolean }): Promise<{ board: KanbanBoard }> {
+    this.requireNative('Mission Control boards are native-only.')
+    return this.createBoardNative(input)
   }
 
-  async deleteBoard(slug: string): Promise<{ ok: true }> {
-    if (this.canAttemptNative()) {
-      this.lastBackendUsed = 'native'
-      return this.deleteBoardNative(slug)
-    }
-    this.lastBackendUsed = 'legacy'
-    return this.deleteBoardLegacy(slug)
+  async updateBoard(slug: string, input: { name?: string; description?: string; icon?: string; color?: string }): Promise<{ board: KanbanBoard }> {
+    this.requireNative('Mission Control boards are native-only.')
+    return this.updateBoardNative(slug, input)
+  }
+
+  async deleteBoard(slug: string, opts?: { hardDelete?: boolean }): Promise<{ ok: true }> {
+    this.requireNative('Mission Control boards are native-only.')
+    return this.deleteBoardNative(slug, opts)
   }
 
   async listTasks(opts: ListTasksOptions): Promise<KanbanTask[]> {
-    return this.withFallback(
-      () => this.listTasksNative(opts),
-      () => this.listTasksLegacy(opts),
-    )
+    this.requireNative()
+    return this.listTasksNative(opts)
   }
 
   async getTask(taskId: string, opts: GetTaskOptions): Promise<TaskDetailResult> {
-    return this.withFallback(
-      () => this.getTaskNative(taskId, opts),
-      () => this.getTaskLegacy(taskId, opts),
-    )
+    this.requireNative()
+    return this.getTaskNative(taskId, opts)
   }
 
   async createTask(input: CreateTaskInput): Promise<{ ok: true; taskId: string; task?: KanbanTask }> {
-    return this.withFallback(
-      () => this.createTaskNative(input),
-      () => this.createTaskLegacy(input),
-    )
+    this.requireNative()
+    return this.createTaskNative(input)
   }
 
   async updateTask(taskId: string, patch: UpdateTaskInput, senderName: string, board?: string): Promise<{ ok: true; task?: KanbanTask }> {
-    return this.withFallback(
-      () => this.updateTaskNative(taskId, patch, board),
-      () => this.updateTaskLegacy(taskId, patch, senderName, board),
-    )
+    void senderName
+    this.requireNative()
+    return this.updateTaskNative(taskId, patch, board)
   }
 
   async addComment(taskId: string, text: string, senderName: string, board?: string): Promise<{ ok: true; commentId?: string }> {
-    return this.withFallback(
-      () => this.addCommentNative(taskId, text, senderName, board),
-      () => this.addCommentLegacy(taskId, text, senderName),
-    )
+    this.requireNative()
+    return this.addCommentNative(taskId, text, senderName, board)
+  }
+
+  async addLink(parentId: string, childId: string, opts: { board?: string }): Promise<{ ok: true }> {
+    this.requireNative()
+    const params = new URLSearchParams({ board: opts.board ?? 'default' })
+    const res = await fetch(this.buildUrl('/api/plugins/kanban/links', params), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent_id: parentId, child_id: childId }),
+    })
+    await checkResponse(res, 'native add link')
+    this.lastBackendUsed = 'native'
+    return { ok: true }
+  }
+
+  async deleteLink(parentId: string, childId: string, opts: { board?: string }): Promise<{ ok: true }> {
+    this.requireNative()
+    const params = new URLSearchParams({ board: opts.board ?? 'default', parent_id: parentId, child_id: childId })
+    const res = await fetch(this.buildUrl('/api/plugins/kanban/links', params), { method: 'DELETE' })
+    await checkResponse(res, 'native delete link')
+    this.lastBackendUsed = 'native'
+    return { ok: true }
   }
 
   async dispatchTask(taskId: string, opts: { board?: string }): Promise<{ ok: true; task?: KanbanTask }> {
-    if (!this.canAttemptNative()) {
-      this.lastBackendUsed = 'legacy'
-      throw new Error('native dispatch is not available in legacy mode')
-    }
-
+    this.requireNative()
     const result = await this.dispatchTaskNative(taskId, opts)
     this.lastBackendUsed = 'native'
     return result
@@ -559,8 +573,9 @@ export class HermesKanbanAdapter {
     return boards
   }
 
-  private async listBoardsNative(): Promise<KanbanBoard[]> {
-    const res = await fetch(this.buildUrl('/api/plugins/kanban/boards'), { cache: 'no-store' })
+  private async listBoardsNative(includeArchived = false): Promise<KanbanBoard[]> {
+    const params = includeArchived ? new URLSearchParams({ include_archived: 'true' }) : undefined
+    const res = await fetch(this.buildUrl('/api/plugins/kanban/boards', params), { cache: 'no-store' })
     await checkResponse(res, 'native list boards')
     const data = await res.json() as NativeBoardsResponse
     const boards = (data.boards ?? []).map(board => mapNativeBoard(board, data.current))
@@ -568,11 +583,18 @@ export class HermesKanbanAdapter {
     return boards
   }
 
-  private async createBoardLegacy(input: { name: string; slug?: string }): Promise<{ board: KanbanBoard }> {
+  private async createBoardLegacy(input: { name: string; slug?: string; description?: string; icon?: string; color?: string; switchToBoard?: boolean }): Promise<{ board: KanbanBoard }> {
     const name = input.name.trim()
     if (!name) throw new Error('name required')
     const slug = normalizeBoardSlug(input.slug ?? name)
-    const board: KanbanBoard = { slug, name, createdAt: new Date().toISOString() }
+    const board: KanbanBoard = {
+      slug,
+      name,
+      description: input.description?.trim() || undefined,
+      icon: input.icon?.trim() || undefined,
+      color: input.color?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    }
     await ddb.send(new PutCommand({
       TableName: TABLES.kanban,
       Item: { pk: 'BOARD_META', sk: `BOARD#${slug}`, ...board },
@@ -580,14 +602,14 @@ export class HermesKanbanAdapter {
     return { board }
   }
 
-  private async createBoardNative(input: { name: string; slug?: string }): Promise<{ board: KanbanBoard }> {
+  private async createBoardNative(input: { name: string; slug?: string; description?: string; icon?: string; color?: string; switchToBoard?: boolean }): Promise<{ board: KanbanBoard }> {
     const name = input.name.trim()
     if (!name) throw new Error('name required')
     const slug = normalizeBoardSlug(input.slug ?? name)
     const res = await fetch(this.buildUrl('/api/plugins/kanban/boards'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slug, name, switch: false }),
+      body: JSON.stringify({ slug, name, description: input.description, icon: input.icon, color: input.color, switch: Boolean(input.switchToBoard) }),
     })
     await checkResponse(res, 'native create board')
     const data = await res.json() as { board?: NativeBoardPayload }
@@ -621,8 +643,20 @@ export class HermesKanbanAdapter {
     return { ok: true }
   }
 
-  private async deleteBoardNative(slug: string): Promise<{ ok: true }> {
-    const res = await fetch(this.buildUrl(`/api/plugins/kanban/boards/${encodeURIComponent(slug)}`), { method: 'DELETE' })
+  private async updateBoardNative(slug: string, input: { name?: string; description?: string; icon?: string; color?: string }): Promise<{ board: KanbanBoard }> {
+    const res = await fetch(this.buildUrl(`/api/plugins/kanban/boards/${encodeURIComponent(slug)}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: input.name, description: input.description, icon: input.icon, color: input.color }),
+    })
+    await checkResponse(res, `native update board ${slug}`)
+    const data = await res.json() as { board?: NativeBoardPayload }
+    return { board: mapNativeBoard(data.board ?? { slug, name: input.name ?? slug }) }
+  }
+
+  private async deleteBoardNative(slug: string, opts?: { hardDelete?: boolean }): Promise<{ ok: true }> {
+    const query = opts?.hardDelete ? new URLSearchParams({ delete: 'true' }) : undefined
+    const res = await fetch(this.buildUrl(`/api/plugins/kanban/boards/${encodeURIComponent(slug)}`, query), { method: 'DELETE' })
     await checkResponse(res, `native delete board ${slug}`)
     return { ok: true }
   }
@@ -631,6 +665,7 @@ export class HermesKanbanAdapter {
     const board = opts.board ?? 'default'
     const statusFilter = opts.status ?? null
     const assigneeFilter = opts.assignee ?? null
+    const tenantFilter = opts.tenant ?? null
     const searchQuery = opts.search?.toLowerCase().trim() || null
     const includeArchived = Boolean(opts.includeArchived)
 
@@ -644,6 +679,7 @@ export class HermesKanbanAdapter {
     if (!includeArchived) tasks = tasks.filter(task => !task.archivedAt)
     if (statusFilter) tasks = tasks.filter(task => task.status === statusFilter)
     if (assigneeFilter) tasks = tasks.filter(task => task.assignee === assigneeFilter)
+    if (tenantFilter) tasks = tasks.filter(task => task.tenant === tenantFilter)
     if (searchQuery) {
       tasks = tasks.filter(task =>
         task.title.toLowerCase().includes(searchQuery)
@@ -666,10 +702,12 @@ export class HermesKanbanAdapter {
 
     const statusFilter = opts.status ?? null
     const assigneeFilter = opts.assignee ?? null
+    const tenantFilter = opts.tenant ?? null
     const searchQuery = opts.search?.toLowerCase().trim() || null
     let filtered = tasks.filter(task => opts.includeArchived || !task.archivedAt)
     if (statusFilter) filtered = filtered.filter(task => task.status === statusFilter)
     if (assigneeFilter) filtered = filtered.filter(task => task.assignee === assigneeFilter)
+    if (tenantFilter) filtered = filtered.filter(task => task.tenant === tenantFilter)
     if (searchQuery) {
       filtered = filtered.filter(task =>
         task.title.toLowerCase().includes(searchQuery)
@@ -697,13 +735,16 @@ export class HermesKanbanAdapter {
     ])
 
     if (!taskRes.Item) throw new Error('task not found')
-    const task = mapLegacyTask(taskRes.Item as Record<string, unknown>, board)
     const comments = (commentsRes.Items ?? []).map(comment => ({
       commentId: comment.commentId as string,
       body: comment.body as string,
       author: comment.author as string,
       ts: comment.ts as string,
     }))
+    const task = {
+      ...mapLegacyTask(taskRes.Item as Record<string, unknown>, board),
+      commentCount: comments.length,
+    }
 
     return {
       task,
@@ -711,7 +752,6 @@ export class HermesKanbanAdapter {
       events: [],
       runs: [],
       canDispatch: false,
-      canLaunchInChat: true,
       log: { exists: false, content: '', truncated: false },
     }
   }
@@ -752,10 +792,9 @@ export class HermesKanbanAdapter {
     }
 
     const canDispatch = Boolean(
-      this.canAttemptNative()
-      && !task.archivedAt
+      !task.archivedAt
       && ['ready', 'todo', 'blocked'].includes(data.task.status)
-      && task.assignee,
+      && Boolean(task.assignee),
     )
 
     return {
@@ -764,7 +803,6 @@ export class HermesKanbanAdapter {
       events,
       runs,
       canDispatch,
-      canLaunchInChat: false,
       log,
     }
   }
@@ -773,11 +811,14 @@ export class HermesKanbanAdapter {
     const title = (input.title ?? '').trim()
     if (!title) throw new Error('title required')
     const board = input.board ?? 'default'
-    const assignee = (input.assignee ?? 'general').trim()
+    const assignee = (input.assignee ?? '').trim()
     const priority = (input.priority ?? 'normal').trim()
     const workspace = (input.workspaceType ?? 'scratch').trim()
     const description = (input.description ?? '').trim()
     const tags = input.tags ?? []
+    const wantsTriage = input.triage ?? assignee === ''
+    const status: KanbanStatus = wantsTriage ? 'triage' : assignee ? 'ready' : 'todo'
+    const parentIds = input.parentIds ?? []
     const now = new Date().toISOString()
     const taskId = `t_${randomBytes(4).toString('hex')}`
 
@@ -789,13 +830,17 @@ export class HermesKanbanAdapter {
         taskId,
         title,
         body: description,
-        status: 'triage',
+        status,
         assignee,
         priority,
         workspaceType: workspace,
         tags,
         tenant: input.tenant ?? null,
-        parentIds: [],
+        workspacePath: input.workspacePath ?? null,
+        skills: input.skills ?? null,
+        idempotencyKey: input.idempotencyKey ?? null,
+        maxRuntimeSeconds: input.maxRuntimeSeconds ?? null,
+        parentIds,
         childIds: [],
         commentCount: 0,
         createdAt: now,
@@ -803,17 +848,35 @@ export class HermesKanbanAdapter {
       },
     }))
 
+    for (const parentId of parentIds) {
+      await ddb.send(new UpdateCommand({
+        TableName: TABLES.kanban,
+        Key: { pk: boardPk(board), sk: `TASK#${parentId}` },
+        UpdateExpression: 'SET childIds = list_append(if_not_exists(childIds, :empty), :child), updatedAt = :ts',
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeValues: {
+          ':empty': [],
+          ':child': [taskId],
+          ':ts': now,
+        },
+      })).catch(() => {})
+    }
+
     return { ok: true, taskId, task: mapLegacyTask({
       taskId,
       title,
       body: description,
-      status: 'triage',
+      status,
       assignee,
       priority,
       workspaceType: workspace,
       tags,
       tenant: input.tenant ?? undefined,
-      parentIds: [],
+      workspacePath: input.workspacePath ?? undefined,
+      skills: input.skills ?? undefined,
+      idempotencyKey: input.idempotencyKey ?? undefined,
+      maxRuntimeSeconds: input.maxRuntimeSeconds ?? undefined,
+      parentIds,
       childIds: [],
       commentCount: 0,
       createdAt: now,
@@ -827,18 +890,24 @@ export class HermesKanbanAdapter {
     const board = input.board ?? 'default'
     const params = new URLSearchParams({ board })
     const bodyWithMeta = attachBodyMeta((input.description ?? '').trim() || undefined, { tags: input.tags })
-    const wantsTriage = (input.assignee ?? 'general').trim() === 'general'
+    const normalizedAssignee = (input.assignee ?? '').trim()
+    const wantsTriage = input.triage ?? normalizedAssignee === ''
     const res = await fetch(this.buildUrl('/api/plugins/kanban/tasks', params), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title,
         body: bodyWithMeta,
-        assignee: (input.assignee ?? 'general').trim() || undefined,
+        assignee: normalizedAssignee || undefined,
         tenant: input.tenant ?? undefined,
         priority: priorityStringToNative(input.priority),
         workspace_kind: (input.workspaceType ?? 'scratch').trim() || 'scratch',
+        workspace_path: input.workspacePath ?? undefined,
+        parents: input.parentIds ?? [],
         triage: wantsTriage,
+        idempotency_key: input.idempotencyKey ?? undefined,
+        max_runtime_seconds: input.maxRuntimeSeconds ?? undefined,
+        skills: input.skills ?? undefined,
       }),
     })
     await checkResponse(res, 'native create task')
@@ -888,7 +957,7 @@ export class HermesKanbanAdapter {
       return { ok: true, task: (await this.getTaskLegacy(taskId, { board })).task }
     }
 
-    if (patch.assignee) {
+    if (patch.assignee !== undefined) {
       await ddb.send(new UpdateCommand({
         TableName: TABLES.kanban,
         Key: { pk: boardKey, sk: `TASK#${taskId}` },
@@ -898,7 +967,7 @@ export class HermesKanbanAdapter {
       return { ok: true, task: (await this.getTaskLegacy(taskId, { board })).task }
     }
 
-    if (patch.title) {
+    if (patch.title !== undefined) {
       await ddb.send(new UpdateCommand({
         TableName: TABLES.kanban,
         Key: { pk: boardKey, sk: `TASK#${taskId}` },
@@ -908,7 +977,7 @@ export class HermesKanbanAdapter {
       return { ok: true, task: (await this.getTaskLegacy(taskId, { board })).task }
     }
 
-    if (patch.priority) {
+    if (patch.priority !== undefined) {
       await ddb.send(new UpdateCommand({
         TableName: TABLES.kanban,
         Key: { pk: boardKey, sk: `TASK#${taskId}` },
@@ -928,8 +997,11 @@ export class HermesKanbanAdapter {
     if (patch.status) body.status = patch.status
     if (patch.assignee !== undefined) body.assignee = patch.assignee
     if (patch.title !== undefined) body.title = patch.title
+    if (patch.body !== undefined) body.body = patch.body
     if (patch.priority !== undefined) body.priority = priorityStringToNative(patch.priority)
     if (patch.result !== undefined) body.result = patch.result
+    if (patch.summary !== undefined) body.summary = patch.summary
+    if (patch.metadata !== undefined) body.metadata = patch.metadata
     if (patch.reason !== undefined) body.block_reason = patch.reason
 
     const res = await fetch(this.buildUrl(`/api/plugins/kanban/tasks/${encodeURIComponent(taskId)}`, params), {
@@ -942,7 +1014,7 @@ export class HermesKanbanAdapter {
     return { ok: true, task: data.task ? mapNativeTask(data.task, board) : undefined }
   }
 
-  private async addCommentLegacy(taskId: string, text: string, senderName: string): Promise<{ ok: true; commentId: string }> {
+  private async addCommentLegacy(taskId: string, text: string, senderName: string, board = 'default'): Promise<{ ok: true; commentId: string }> {
     const now = new Date().toISOString()
     const commentId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
     await ddb.send(new PutCommand({
@@ -956,6 +1028,12 @@ export class HermesKanbanAdapter {
         ts: now,
       },
     }))
+    await ddb.send(new UpdateCommand({
+      TableName: TABLES.kanban,
+      Key: { pk: boardPk(board), sk: `TASK#${taskId}` },
+      UpdateExpression: 'SET commentCount = if_not_exists(commentCount, :zero) + :inc, updatedAt = :ts',
+      ExpressionAttributeValues: { ':zero': 0, ':inc': 1, ':ts': now },
+    })).catch(() => {})
     hermesClient.kanbanComment(taskId, text, senderName).catch(() => {})
     return { ok: true, commentId }
   }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { X, MessageSquare, Send, Archive, Bot, Play, Clock3, Workflow, FileText, Link2 } from 'lucide-react'
+import { X, MessageSquare, Send, Archive, Play, Clock3, Workflow, FileText, Link2 } from 'lucide-react'
 import type { Agent } from '@/types/agent'
 import type { KanbanBackend, KanbanComment, KanbanEvent, KanbanRun, KanbanTask, KanbanTaskLog } from '@/types/kanban'
 
@@ -43,7 +43,6 @@ interface Props {
   onUpdate: (taskId: string, patch: Record<string, unknown>) => Promise<KanbanTask | undefined>
   onTaskSync?: (task: KanbanTask) => void
   onRefreshBoard?: () => Promise<void>
-  onLaunchInChat?: (task: KanbanTask) => void
 }
 
 interface TaskDetailResponse {
@@ -52,7 +51,6 @@ interface TaskDetailResponse {
   events?: KanbanEvent[]
   runs?: KanbanRun[]
   canDispatch?: boolean
-  canLaunchInChat?: boolean
   backend?: KanbanBackend
   log?: KanbanTaskLog
 }
@@ -94,7 +92,7 @@ function summarizeEvent(event: KanbanEvent) {
   }
 }
 
-export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, onTaskSync, onRefreshBoard, onLaunchInChat }: Props) {
+export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, onTaskSync, onRefreshBoard }: Props) {
   const [currentTask, setCurrentTask] = useState<KanbanTask>(task)
   const [comments, setComments] = useState<KanbanComment[]>([])
   const [events, setEvents] = useState<KanbanEvent[]>([])
@@ -104,8 +102,7 @@ export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, on
   const [sendingComment, setSendingComment] = useState(false)
   const [dispatching, setDispatching] = useState(false)
   const [canDispatch, setCanDispatch] = useState(false)
-  const [canLaunchInChat, setCanLaunchInChat] = useState(Boolean(onLaunchInChat))
-  const [backend, setBackend] = useState<KanbanBackend>('legacy')
+  const [backend, setBackend] = useState<KanbanBackend>('native')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgent, setSelectedAgent] = useState(task.assignee)
   const [newParentId, setNewParentId] = useState('')
@@ -137,8 +134,7 @@ export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, on
       setEvents((data.events ?? []).slice().sort((a, b) => b.ts.localeCompare(a.ts)))
       setRuns((data.runs ?? []).slice().sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? '')))
       setCanDispatch(Boolean(data.canDispatch))
-      setCanLaunchInChat(Boolean(data.canLaunchInChat) && Boolean(onLaunchInChat))
-      setBackend(data.backend === 'native' ? 'native' : 'legacy')
+      setBackend('native')
       setLog(data.log ?? { exists: false, content: '', truncated: false })
     }
     if (agentResult.ok && agentResult.data?.agents) {
@@ -149,7 +145,7 @@ export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, on
 
   useEffect(() => {
     void refreshDetail().catch(() => {})
-  }, [task.taskId, task.boardSlug, onLaunchInChat])
+  }, [task.taskId, task.boardSlug])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -250,8 +246,7 @@ export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, on
     await onRefreshBoard?.()
   }
 
-  const showDispatch = backend === 'native' && canDispatch && currentTask.status !== 'done' && currentTask.status !== 'archived' && !currentTask.archivedAt
-  const showChatLaunch = backend !== 'native' && canLaunchInChat && currentTask.status !== 'done' && currentTask.status !== 'archived' && !currentTask.archivedAt
+  const showDispatch = canDispatch && currentTask.status !== 'done' && currentTask.status !== 'archived' && !currentTask.archivedAt
 
   const parentCandidates = availableTasks.filter(candidate => candidate.taskId !== currentTask.taskId && !currentTask.parentIds.includes(candidate.taskId))
   const childCandidates = availableTasks.filter(candidate => candidate.taskId !== currentTask.taskId && !currentTask.childIds.includes(candidate.taskId))
@@ -323,7 +318,7 @@ export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, on
             </div>
           </div>
 
-          {(showDispatch || showChatLaunch || dispatchHint) && (
+          {(showDispatch || dispatchHint) && (
             <div>
               <div className="text-[9px] font-mono uppercase tracking-widest mb-2" style={{ color: '#859398' }}>Execution</div>
               {showDispatch && (
@@ -336,17 +331,7 @@ export default function TaskDrawer({ task, availableTasks, onClose, onUpdate, on
                   </div>
                 </div>
               )}
-              {showChatLaunch && (
-                <div className="flex flex-col gap-2">
-                  <button onClick={() => onLaunchInChat?.(currentTask)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-mono font-semibold transition-all" style={{ background: 'linear-gradient(135deg, rgba(60,215,255,0.15), rgba(93,246,224,0.15))', border: '1px solid rgba(93,246,224,0.3)', color: '#5df6e0' }}>
-                    <Bot size={14} /> Open Manual Hermes Chat
-                  </button>
-                  <div className="text-[10px] font-mono" style={{ color: '#859398' }}>
-                    Legacy boards launch a linked chat session only. The task stays in its current lifecycle state until someone explicitly marks it done or blocked.
-                  </div>
-                </div>
-              )}
-              {!showDispatch && !showChatLaunch && dispatchHint && (
+              {!showDispatch && dispatchHint && (
                 <div className="text-[11px] leading-relaxed rounded-xl p-3 mt-0" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#859398' }}>
                   {dispatchHint}
                 </div>

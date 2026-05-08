@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
+import { getRequestActorName } from '@/lib/request-actor'
 import { hermesKanban } from '@/lib/hermes-kanban'
 
 export async function POST(
@@ -14,14 +13,13 @@ export async function POST(
     const text = (body.text ?? '').trim()
     if (!text) return NextResponse.json({ error: 'text required' }, { status: 400 })
 
-    const session = await getServerSession(authOptions)
-    const senderName = session?.user?.name ?? session?.user?.email ?? 'me'
+    const senderName = await getRequestActorName('Mission Control')
     const result = await hermesKanban.addComment(params.taskId, text, senderName, board)
     return NextResponse.json(result)
   } catch (err) {
     console.error(`[api/kanban/${params.taskId}/comments POST]`, err)
     const message = err instanceof Error ? err.message : String(err)
-    const status = message.includes('required') ? 400 : message.includes('not found') ? 404 : 500
+    const status = message.includes('required') ? 400 : message.includes('requires Hermes native kanban') || message.includes('Configure HERMES_KANBAN_BRIDGE_URL') ? 503 : message.includes('not found') ? 404 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }

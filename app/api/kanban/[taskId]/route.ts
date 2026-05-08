@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
+import { getRequestActorName } from '@/lib/request-actor'
 import { hermesKanban } from '@/lib/hermes-kanban'
 
 export async function GET(
@@ -15,7 +14,7 @@ export async function GET(
   } catch (err) {
     console.error(`[api/kanban/${params.taskId} GET]`, err)
     const message = err instanceof Error ? err.message : String(err)
-    const status = message.includes('not found') ? 404 : 500
+    const status = message.includes('requires Hermes native kanban') || message.includes('Configure HERMES_KANBAN_BRIDGE_URL') ? 503 : message.includes('not found') ? 404 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }
@@ -31,20 +30,22 @@ export async function PATCH(
       status?: string
       reason?: string
       result?: string
+      summary?: string
+      metadata?: Record<string, unknown>
       assignee?: string
       archived?: boolean
       title?: string
+      body?: string
       priority?: string
     }
 
-    const session = await getServerSession(authOptions)
-    const senderName = session?.user?.name ?? session?.user?.email ?? 'Mission Control'
+    const senderName = await getRequestActorName('Mission Control')
     const result = await hermesKanban.updateTask(params.taskId, body, senderName, board)
     return NextResponse.json(result)
   } catch (err) {
     console.error(`[api/kanban/${params.taskId} PATCH]`, err)
     const message = err instanceof Error ? err.message : String(err)
-    const status = message.includes('No recognized') ? 400 : message.includes('not found') ? 404 : message.includes('not valid') ? 409 : message.includes('Cannot set status') ? 409 : 500
+    const status = message.includes('No recognized') ? 400 : message.includes('requires Hermes native kanban') || message.includes('Configure HERMES_KANBAN_BRIDGE_URL') ? 503 : message.includes('not found') ? 404 : message.includes('not valid') ? 409 : message.includes('Cannot set status') ? 409 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }

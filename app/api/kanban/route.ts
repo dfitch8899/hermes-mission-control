@@ -7,15 +7,18 @@ export async function GET(req: NextRequest) {
   const board = searchParams.get('board') ?? 'default'
   const status = searchParams.get('status') as KanbanStatus | null
   const assignee = searchParams.get('assignee')
+  const tenant = searchParams.get('tenant')
   const search = searchParams.get('search')
-  const includeArchived = searchParams.has('includeArchived')
+  const includeArchived = searchParams.has('includeArchived') || searchParams.get('include_archived') === 'true'
 
   try {
-    const tasks = await hermesKanban.listTasks({ board, status, assignee, search, includeArchived })
+    const tasks = await hermesKanban.listTasks({ board, status, assignee, tenant, search, includeArchived })
     return NextResponse.json({ tasks, backend: hermesKanban.lastBackendUsed })
   } catch (err) {
     console.error('[api/kanban GET]', err)
-    return NextResponse.json({ tasks: [], error: String(err) })
+    const message = err instanceof Error ? err.message : String(err)
+    const status = message.includes('requires Hermes native kanban') || message.includes('Configure HERMES_KANBAN_BRIDGE_URL') ? 503 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }
 
@@ -27,8 +30,14 @@ export async function POST(req: NextRequest) {
       assignee?: string
       priority?: string
       workspaceType?: string
+      workspacePath?: string
       tenant?: string
       tags?: string[]
+      parentIds?: string[]
+      triage?: boolean
+      idempotencyKey?: string
+      maxRuntimeSeconds?: number
+      skills?: string[]
       board?: string
     }
 
@@ -38,8 +47,14 @@ export async function POST(req: NextRequest) {
       assignee: body.assignee,
       priority: body.priority,
       workspaceType: body.workspaceType,
+      workspacePath: body.workspacePath,
       tenant: body.tenant,
       tags: body.tags,
+      parentIds: body.parentIds,
+      triage: body.triage,
+      idempotencyKey: body.idempotencyKey,
+      maxRuntimeSeconds: body.maxRuntimeSeconds,
+      skills: body.skills,
       board: body.board,
     })
     return NextResponse.json(result, { status: 202 })

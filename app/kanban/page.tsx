@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import TopAppBar from '@/components/layout/TopAppBar'
 import KanbanColumn from '@/components/kanban/KanbanColumn'
 import TaskDrawer from '@/components/kanban/TaskDrawer'
@@ -15,7 +14,6 @@ const POLL_INTERVAL_MS = 5000
 const BOARD_STORAGE_KEY = 'mission-control-kanban-board'
 
 export default function KanbanPage() {
-  const router = useRouter()
   const [boards, setBoards] = useState<KanbanBoard[]>([])
   const [activeBoard, setActiveBoard] = useState<string>('default')
   const [showBoardMenu, setShowBoardMenu] = useState(false)
@@ -31,7 +29,8 @@ export default function KanbanPage() {
   const [assigneeFilter, setAssigneeFilter] = useState('')
   const [tenantFilter, setTenantFilter] = useState('')
   const [includeArchived, setIncludeArchived] = useState(false)
-  const [boardBackend, setBoardBackend] = useState<KanbanBackend>('legacy')
+  const [boardBackend, setBoardBackend] = useState<KanbanBackend>('native')
+  const [kanbanError, setKanbanError] = useState<string | null>(null)
   const [boardReady, setBoardReady] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -49,9 +48,13 @@ export default function KanbanPage() {
 
   const fetchBoards = useCallback(async () => {
     const response = await fetch('/api/kanban/boards?include_archived=true')
-    if (!response.ok) return
-    const data = await response.json() as { boards?: KanbanBoard[] }
-    if (data.boards) setBoards(data.boards)
+    const data = await response.json().catch(() => null) as { boards?: KanbanBoard[]; error?: string } | null
+    if (!response.ok) {
+      setKanbanError(data?.error || `Board load failed: ${response.status}`)
+      return
+    }
+    setKanbanError(null)
+    if (data?.boards) setBoards(data.boards)
   }, [])
 
   useEffect(() => {
@@ -72,13 +75,17 @@ export default function KanbanPage() {
       if (tenantFilter) params.set('tenant', tenantFilter)
       if (includeArchived) params.set('include_archived', 'true')
       const response = await fetch(`/api/kanban?${params.toString()}`)
-      if (!response.ok) return
-      const data = await response.json() as { tasks: KanbanTask[]; backend?: KanbanBackend }
-      setTasks(data.tasks ?? [])
-      setBoardBackend(data.backend === 'native' ? 'native' : 'legacy')
+      const data = await response.json().catch(() => null) as { tasks?: KanbanTask[]; backend?: KanbanBackend; error?: string } | null
+      if (!response.ok) {
+        setKanbanError(data?.error || `Task load failed: ${response.status}`)
+        return
+      }
+      setKanbanError(null)
+      setTasks(data?.tasks ?? [])
+      setBoardBackend('native')
       setLastUpdated(new Date().toISOString())
-    } catch {
-      // ignore transient failures
+    } catch (error) {
+      setKanbanError(error instanceof Error ? error.message : 'Task load failed')
     } finally {
       setLoading(false)
     }
@@ -132,39 +139,6 @@ export default function KanbanPage() {
     setTimeout(() => void fetchTasks(), 600)
     return data?.task
   }, [activeBoard, fetchTasks, replaceTask])
-
-  const handleLaunchInChat = useCallback(async (task: KanbanTask) => {
-    const board = task.boardSlug ?? activeBoard
-    const response = await fetch(`/api/kanban/${task.taskId}/launch?board=${encodeURIComponent(board)}`, { method: 'POST' })
-    const data = await response.json().catch(() => null) as {
-      error?: string
-      launchMode?: 'manual-chat' | 'dispatch'
-      board?: string
-      prompt?: string
-      agentId?: string
-      task?: KanbanTask
-    } | null
-
-    if (!response.ok) {
-      throw new Error(data?.error || `launch failed: ${response.status}`)
-    }
-
-    if (data?.task) replaceTask(task.taskId, data.task)
-    setTimeout(() => void fetchTasks(), 600)
-
-    if (data?.launchMode === 'dispatch') return
-
-    const promptText = data?.prompt?.trim()
-    if (!promptText) throw new Error('launch prompt missing')
-
-    const params = new URLSearchParams({
-      kanbanTask: task.taskId,
-      board: data?.board ?? board,
-      agent: data?.agentId || task.assignee || 'general',
-      prompt: promptText,
-    })
-    router.push(`/chat?${params.toString()}`)
-  }, [router, activeBoard, fetchTasks, replaceTask])
 
   const handleCreate = useCallback(async (data: {
     title: string
@@ -238,6 +212,12 @@ export default function KanbanPage() {
         <TopAppBar breadcrumb={['Hermes', 'Kanban', activeBoardName]} />
       </div>
 
+      {kanbanError && (
+        <div className="mx-6 mt-4 rounded-2xl px-4 py-3 text-[11px] font-mono" style={{ position: 'relative', zIndex: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#fda4af' }}>
+          Native Hermes kanban is required for Mission Control. {kanbanError}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between px-6 py-3 shrink-0 gap-3" style={{ position: 'relative', zIndex: 10, borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(13,19,35,0.7)', backdropFilter: 'blur(16px)' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative" onClick={event => event.stopPropagation()}>
@@ -271,7 +251,7 @@ export default function KanbanPage() {
           </div>
 
           <span className="text-[10px] font-mono" style={{ color: '#859398' }}>{tasks.length} tasks</span>
-          <span className="text-[10px] font-mono uppercase" style={{ color: boardBackend === 'native' ? '#5df6e0' : '#859398' }}>{boardBackend}</span>
+          <span className="text-[10px] font-mono uppercase" style={{ color: '#5df6e0' }}>{boardBackend}</span>
           {activeBoardMeta?.description && <span className="text-[10px] font-mono" style={{ color: '#859398' }}>{activeBoardMeta.description}</span>}
         </div>
 
@@ -312,6 +292,12 @@ export default function KanbanPage() {
           <div className="flex items-center justify-center h-full">
             <div className="text-[11px] font-mono animate-pulse" style={{ color: '#5df6e0' }}>Loading board...</div>
           </div>
+        ) : kanbanError ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="max-w-xl text-center text-[11px] font-mono leading-6" style={{ color: '#fda4af' }}>
+              Native Hermes kanban is unavailable. Fix the bridge/dashboard configuration, then refresh this board.
+            </div>
+          </div>
         ) : (
           <div className="flex gap-4 h-full pb-2" style={{ minWidth: 'max-content' }}>
             {KANBAN_COLUMNS.filter(column => includeArchived || column.status !== 'archived').map(column => (
@@ -331,7 +317,6 @@ export default function KanbanPage() {
           onUpdate={handleUpdate}
           onTaskSync={task => replaceTask(task.taskId, task)}
           onRefreshBoard={fetchTasks}
-          onLaunchInChat={task => void handleLaunchInChat(task)}
         />
       )}
 
