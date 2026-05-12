@@ -111,7 +111,10 @@ type SpanProps = React.HTMLAttributes<HTMLSpanElement>
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement>
 type InputProps = React.InputHTMLAttributes<HTMLInputElement>
 type LabelProps = React.LabelHTMLAttributes<HTMLLabelElement>
-type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement>
+type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
+  /** shadcn-style callback: receives the new value (not the event). */
+  onValueChange?: (value: string) => void
+}
 type OptionProps = React.OptionHTMLAttributes<HTMLOptionElement>
 
 const Card = React.forwardRef<HTMLDivElement, DivProps>(({ className, ...p }, ref) =>
@@ -144,9 +147,20 @@ const Label = React.forwardRef<HTMLLabelElement, LabelProps>(({ className, ...p 
 )
 Label.displayName = 'Label'
 
-const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ className, ...p }, ref) =>
-  React.createElement('select', { ref, className: cn('hermes-sdk-select rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm', className), ...p }),
-)
+const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ className, onValueChange, onChange, ...p }, ref) => {
+  const handleChange = onValueChange
+    ? (e: React.ChangeEvent<HTMLSelectElement>) => {
+        onValueChange(e.target.value)
+        if (onChange) onChange(e)
+      }
+    : onChange
+  return React.createElement('select', {
+    ref,
+    className: cn('hermes-sdk-select rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm', className),
+    onChange: handleChange,
+    ...p,
+  })
+})
 Select.displayName = 'Select'
 
 const SelectOption = React.forwardRef<HTMLOptionElement, OptionProps>(({ className, ...p }, ref) =>
