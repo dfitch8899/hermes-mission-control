@@ -127,7 +127,33 @@ Record the Hermes commit SHA you integrate against here when you cut a stable ve
 
 | Date       | Hermes SHA | Notes                              |
 | ---------- | ---------- | ---------------------------------- |
-| 2026-05-12 | _TBD_      | Initial native hosting integration |
+| 2026-05-12 | _TBD_      | Initial native hosting integration. Task def `hermes-agent:37`. |
+
+## Hermes ECS task-def changes (rev 37)
+
+This integration required three changes inside the Hermes container's task definition (`hermes-agent` family, revision 37 is the live one as of 2026-05-12):
+
+1. **Launch the dashboard alongside the gateway.** The deployed `hermes` binary doesn't have a `dashboard` subcommand in this build; the web server module exists at `/opt/data/hermes-src/hermes_cli/web_server.py` on the EFS volume. The container command base64-decodes a launcher script to `/opt/data/dashboard_launcher.py` that:
+   - strips the editable-install meta-path finders (they pin `hermes_cli` to the older `/opt/hermes` source);
+   - prepends `/opt/data/hermes-src` to `sys.path`;
+   - imports `hermes_cli.web_server.start_server` and runs it with `host='0.0.0.0', port=9119, allow_public=True, open_browser=False`.
+   - Output is piped through `sed -u 's/^/[dashboard] /'` so it shows up in CloudWatch with a `[dashboard]` prefix.
+2. **Bind to `0.0.0.0` rather than `127.0.0.1`.** Hermes's `host_header_middleware` rejects requests whose Host header doesn't match the bound interface. `mc_proxy.py` only rewrites the Host on the *first* request of each TCP connection — Node's `fetch` keep-alive bypasses subsequent rewrites and gets blocked. Binding to `0.0.0.0` short-circuits the validation (per Hermes's own docstring: "0.0.0.0 bind means operator explicitly opted into all-interfaces; no protection possible at this layer"). External access is still gated by `mc_proxy.py`'s `X-Hermes-Key` check on the only publicly exposed port (9120).
+3. **`start_server(allow_public=True)`** is required to bind a non-loopback host. Without it, `web_server.py` exits at startup.
+
+If you re-deploy the Hermes task with `hermes dashboard` as a real subcommand or with the web frontend (`web/dist/index.html`) prebuilt, the launcher can collapse to `hermes dashboard --no-open --host 127.0.0.1 --port 9119`.
+
+## Why we mount instead of iframe
+
+The original plan considered an iframe pointed at `/api/hermes/kanban`. The Hermes web dashboard's catch-all returns 404 saying *"Frontend not built. Run: cd web && npm run build"* — the SPA HTML wrapper isn't built into this image. The plugin's JS bundle and CSS are available; we host the plugin React component directly via [components/kanban/HermesNativeKanbanHost.tsx](../components/kanban/HermesNativeKanbanHost.tsx) and a minimal SDK shim at [lib/hermes-plugin-sdk.ts](../lib/hermes-plugin-sdk.ts).
+
+The SDK shim provides what the plugin actually reads from `window.__HERMES_PLUGIN_SDK__`:
+- `React` and the hooks it uses (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`)
+- Shadcn-style primitives — `Card`, `CardContent`, `Badge`, `Button`, `Input`, `Label`, `Select`, `SelectOption` (`Select` translates shadcn `onValueChange` to a native `onChange`)
+- Utilities — `cn` (clsx wrapper) and `timeAgo`
+- `fetchJSON(url)` — rewrites `/api/*` to `/api/hermes/api/*` so plugin traffic transits MC's same-origin proxy
+
+When adding new globals: only after a console error names a missing global. Keep the shim minimal.
 
 ## Cut list
 
