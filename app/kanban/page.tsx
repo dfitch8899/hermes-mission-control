@@ -9,7 +9,7 @@ export default function KanbanPage() {
 
   return (
     <div className="flex flex-col h-screen bg-zinc-950">
-      <TopAppBar />
+      <TopAppBar breadcrumb={['Kanban']} />
       <iframe
         src="/api/hermes/kanban"
         title="Hermes Kanban"
