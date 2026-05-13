@@ -211,15 +211,29 @@ declare global {
   }
 }
 
-let installed = false
-let scriptPromise: Promise<void> | null = null
-const registry: Record<string, React.ComponentType<unknown>> = {}
+// State lives on `window` rather than module-level so HMR can't desync it
+// from the actual DOM/script-tag state. (Module-level `let` resets on every
+// hot-reload, which causes a class of bugs where a stale script tag in the
+// DOM looks "loaded" to fresh module state and the plugin never registers.)
+type PluginRegistry = Record<string, React.ComponentType<unknown>>
+type HostState = typeof globalThis & {
+  __hermesSdkInstalled?: boolean
+  __hermesPluginRegistry?: PluginRegistry
+}
+const _h = (typeof window !== 'undefined' ? window : globalThis) as HostState
+
+function _registry(): PluginRegistry {
+  if (!_h.__hermesPluginRegistry) _h.__hermesPluginRegistry = {}
+  return _h.__hermesPluginRegistry
+}
 
 /** Install the SDK + plugins registry on window. Idempotent. */
 export function installHermesPluginSdk(): void {
   if (typeof window === 'undefined') return
-  if (installed) return
-
+  // Re-installing is harmless and intentional: HMR may have produced new
+  // function references for the SDK's primitives (Card, Button, etc.) that
+  // any subsequent plugin script run will want to destructure. Always
+  // overwrite the window globals with the current module's references.
   const hooks = { useState: React.useState, useEffect: React.useEffect, useCallback: React.useCallback, useMemo: React.useMemo, useRef: React.useRef }
   const components = { Card, CardContent, Badge, Button, Input, Label, Select, SelectOption }
   const utils = { cn, timeAgo }
@@ -234,6 +248,7 @@ export function installHermesPluginSdk(): void {
     fetchJSON,
   }
 
+  const registry = _registry()
   const pluginsRegistry: HermesPluginsRegistry = {
     register(name, component) {
       registry[name] = component
@@ -246,7 +261,7 @@ export function installHermesPluginSdk(): void {
   window.__HERMES_PLUGIN_SDK__ = sdk
   window.__HERMES_PLUGINS__ = pluginsRegistry
   installKanbanEventsShim()
-  installed = true
+  _h.__hermesSdkInstalled = true
 }
 
 // ── WebSocket → EventSource shim for kanban live events ──────────────────────
@@ -418,24 +433,45 @@ class KanbanEventsShim {
   dispatchEvent(_event: Event): boolean { return false }
 }
 
-/** Load a Hermes plugin script tag once. Returns a cached promise on repeat calls. */
-export function loadHermesPluginScript(src: string): Promise<void> {
+/**
+ * Load a Hermes plugin script tag. Designed to be safe across Next.js dev
+ * HMR cycles: if a script tag for this src is already in the DOM but the
+ * plugin never registered (most likely because the bundle ran before our
+ * SDK was on `window` — a real race after Fast Refresh), the old tag is
+ * removed and the script is re-loaded with a cache-busting query so the
+ * browser actually re-executes it. The bundle's IIFE will then see the
+ * current SDK and register cleanly.
+ *
+ * The plugin name is encoded in `data-hermes-plugin` so we can find prior
+ * tags even if cache-busting suffixes differ.
+ */
+export function loadHermesPluginScript(src: string, pluginName = 'kanban'): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
-  if (scriptPromise) return scriptPromise
-  scriptPromise = new Promise<void>((resolve, reject) => {
-    const existing = Array.from(document.scripts).find(s => s.src.endsWith(src))
-    if (existing) { resolve(); return }
+
+  // If the plugin has already registered, we're done. (Idempotent across
+  // remounts in production where this is the common path.)
+  if (_registry()[pluginName]) return Promise.resolve()
+
+  // Remove any prior attempts. In production there won't be any; in dev
+  // HMR may have left a stale tag whose IIFE bailed silently.
+  document
+    .querySelectorAll(`script[data-hermes-plugin="${pluginName}"]`)
+    .forEach(el => el.remove())
+
+  return new Promise<void>((resolve, reject) => {
     const el = document.createElement('script')
-    el.src = src
+    el.dataset.hermesPlugin = pluginName
+    // Cache-bust so the browser re-executes the IIFE every load attempt.
+    // The bundle is tiny (~100 KB) and only refetched when the host mounts.
+    el.src   = src + (src.includes('?') ? '&' : '?') + '_cb=' + Date.now()
     el.async = true
-    el.onload = () => resolve()
+    el.onload  = () => resolve()
     el.onerror = () => reject(new Error(`Failed to load Hermes plugin script: ${src}`))
     document.head.appendChild(el)
   })
-  return scriptPromise
 }
 
 /** Read a registered plugin component (null if not yet registered). */
 export function getRegisteredHermesPlugin(name: string): React.ComponentType<unknown> | null {
-  return registry[name] || null
+  return _registry()[name] || null
 }
