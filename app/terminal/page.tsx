@@ -204,9 +204,17 @@ export default function TerminalPage() {
   const [multiStep, setMultiStep] = useState<MultiStepState>(null)
   const [currentPrompt, setCurrentPrompt] = useState<string | undefined>(undefined)
   const streamingLineId = useRef<string | null>(null)
+  const statusLineId    = useRef<string | null>(null)
 
   const addLine = useCallback((type: TerminalLine['type'], content: string) => {
     setLines(prev => [...prev, makeLine(type, content)])
+  }, [])
+
+  const removeStatusLine = useCallback(() => {
+    if (!statusLineId.current) return
+    const id = statusLineId.current
+    statusLineId.current = null
+    setLines(prev => prev.filter(l => l.id !== id))
   }, [])
 
   const addLines = useCallback((newLines: Array<{ type: TerminalLine['type']; content: string }>) => {
@@ -229,20 +237,30 @@ export default function TerminalPage() {
   const runHermesCommand = useCallback(async (command: string) => {
     setProcessing(true)
     streamingLineId.current = null
-    addLine('info', '⏳ Sending to Hermes...')
+    // Track the status line so we can replace it when the result arrives.
+    const statusLine = makeLine('info', '⏳ Sending to Hermes...')
+    statusLineId.current = statusLine.id
+    setLines(prev => [...prev, statusLine])
+
+    let sawEvent = false
+    const controller = new AbortController()
+    const timeout    = setTimeout(() => controller.abort(), 40_000)
+
     try {
       const res = await fetch('/api/terminal/execute', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command }),
+        body:    JSON.stringify({ command }),
+        signal:  controller.signal,
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }))
+        removeStatusLine()
         addLine('error', err.error ?? 'Request failed')
         return
       }
       const reader = res.body?.getReader()
-      if (!reader) { addLine('error', 'No response stream'); return }
+      if (!reader) { removeStatusLine(); addLine('error', 'No response stream'); return }
       const dec = new TextDecoder()
       let buf = ''
       while (true) {
@@ -256,18 +274,41 @@ export default function TerminalPage() {
           if (!line.startsWith('data: ')) continue
           try {
             const event = JSON.parse(line.slice(6))
-            if (event.type === 'text_replace') setStreamLine(event.text)
-            else if (event.type === 'error')    addLine('error', event.message)
+            if (event.type === 'text_replace') {
+              removeStatusLine()
+              sawEvent = true
+              setStreamLine(event.text)
+            } else if (event.type === 'error') {
+              removeStatusLine()
+              sawEvent = true
+              const msg = String(event.message ?? 'Unknown error').replace(/^Error:\s*/, '')
+              addLine('error', msg)
+            } else if (event.type === 'done') {
+              // Server signalled completion; nothing to render but mark seen so
+              // the stream-close fallback doesn't fire.
+              sawEvent = true
+            }
+            // 'status' events are intentionally ignored — they're connecting noise.
           } catch { /* skip malformed */ }
         }
       }
-    } catch {
-      addLine('error', 'Stream error — check network connection')
+      if (!sawEvent) {
+        removeStatusLine()
+        addLine('error', '(no response from Hermes — server closed stream silently)')
+      }
+    } catch (err) {
+      removeStatusLine()
+      const aborted = (err as Error)?.name === 'AbortError'
+      addLine('error', aborted
+        ? 'Hermes did not respond within 40s — check that the dashboard is running'
+        : 'Stream error — check network connection')
     } finally {
+      clearTimeout(timeout)
       streamingLineId.current = null
+      statusLineId.current    = null
       setProcessing(false)
     }
-  }, [addLine, setStreamLine])
+  }, [addLine, removeStatusLine, setStreamLine])
 
   // ─── Main command dispatcher ─────────────────────────────────────────────────
   const executeCommand = useCallback(async (rawInput: string) => {
@@ -334,10 +375,10 @@ export default function TerminalPage() {
             })
           }
         } else {
-          addLine('error', `✗ ${data.diagnosis}`)
-          if (data.kanban?.httpStatus !== null) {
-            addLine('output', `  Kanban probe: HTTP ${data.kanban?.httpStatus ?? 'no response'}`)
-            addLine('output', `  Model probe:  HTTP ${data.model?.httpStatus ?? 'no response'}`)
+          addLine('error', `✗ ${data.diagnosis ?? data.reason ?? 'Hermes unreachable'}`)
+          if (data.exec || data.model) {
+            addLine('output', `  Exec probe:  HTTP ${data.exec?.httpStatus ?? 'no response'}`)
+            addLine('output', `  Model probe: HTTP ${data.model?.httpStatus ?? 'no response'}`)
           }
           if (data.transport !== 'direct') {
             addLine('warn', '→ Restart MC after updating .env.local with HERMES_TRANSPORT=direct')
