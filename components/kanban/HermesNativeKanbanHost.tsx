@@ -499,10 +499,13 @@ function HermesKanbanLiquidGlass() {
         margin: 16px 0 8px;
       }
 
-      /* Comments + events list rows */
+      /* Comments + events list rows — outer rows ONLY, not their children.
+       * The plugin nests each row with -head/-author/-ago etc. sub-elements
+       * that would otherwise pick up the same border treatment. */
       .hermes-kanban-drawer .hermes-kanban-drawer-comment-row,
-      .hermes-kanban-drawer [class*="-event"],
-      .hermes-kanban-drawer [class*="-comment"] {
+      .hermes-kanban-drawer > .hermes-kanban-drawer-body .hermes-kanban-event,
+      .hermes-kanban-drawer > .hermes-kanban-drawer-body .hermes-kanban-comment,
+      .hermes-kanban-drawer > .hermes-kanban-drawer-body .hermes-kanban-run {
         border-radius: var(--radius-sm);
         background: rgba(255, 255, 255, 0.025);
         border: 1px solid rgba(255, 255, 255, 0.04);
@@ -511,6 +514,34 @@ function HermesKanbanLiquidGlass() {
         font-size: 12.5px;
         line-height: 1.45;
         color: rgba(221, 226, 249, 0.92);
+      }
+
+      /* Sub-elements explicitly opt OUT of the row border — they paint
+       * their own typography directly on the row's surface. */
+      .hermes-kanban-drawer .hermes-kanban-comment > *,
+      .hermes-kanban-drawer .hermes-kanban-event > *,
+      .hermes-kanban-drawer .hermes-kanban-run > * {
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin: 0;
+      }
+      .hermes-kanban-drawer .hermes-kanban-comment-head,
+      .hermes-kanban-drawer .hermes-kanban-event-header-plain,
+      .hermes-kanban-drawer .hermes-kanban-run-head {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        font-size: 11px;
+        color: var(--color-muted-foreground);
+        font-family: var(--font-mono);
+        margin-bottom: 4px;
+      }
+      .hermes-kanban-drawer .hermes-kanban-event-kind,
+      .hermes-kanban-drawer .hermes-kanban-run-outcome {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
       }
 
       /* Close button — make it actually look like a control, not a glyph */
@@ -532,13 +563,23 @@ function HermesKanbanLiquidGlass() {
         border-color: rgba(255, 107, 61, 0.25);
       }
 
-      /* Diagnostics callout — high-contrast amber for the attention banner */
-      .hermes-kanban-drawer [class*="diagnostic"],
-      .hermes-kanban-drawer [class*="-attention"],
-      .hermes-kanban-drawer [class*="-warn"] {
-        background: rgba(255, 158, 59, 0.08) !important;
-        border: 1px solid rgba(255, 158, 59, 0.25) !important;
+      /* Diagnostics callout — outer container only (the plugin nests
+       * .hermes-kanban-diag-header / -sev / -title / -detail / etc., so
+       * a wildcard would paint the border on every nested element). */
+      .hermes-kanban-drawer .hermes-kanban-diag {
+        background: rgba(255, 158, 59, 0.08);
+        border: 1px solid rgba(255, 158, 59, 0.25);
         border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        margin-bottom: 6px;
+      }
+      .hermes-kanban-drawer .hermes-kanban-diag--error {
+        background: rgba(255, 107, 61, 0.08);
+        border-color: rgba(255, 107, 61, 0.3);
+      }
+      .hermes-kanban-drawer .hermes-kanban-diag > * {
+        background: transparent;
+        border: none;
       }
 
       /* Status pill at the top of the drawer */
@@ -552,13 +593,67 @@ function HermesKanbanLiquidGlass() {
         border-radius: 9999px;
       }
 
-      /* Top-level toolbar pill ("X tasks needs attention" banner) */
-      .hermes-kanban-host .hermes-kanban-attention,
-      .hermes-kanban-host [class*="kanban-attention"]:not([class*="dot"]) {
+      /* Top-level toolbar pill ("X tasks need attention" banner) — outer
+       * container ONLY. The banner nests a -bar (background), -icon,
+       * -text, -toggle button, and -dismiss button; previously each got
+       * the amber border so it read as nested boxes. */
+      .hermes-kanban-host .hermes-kanban-attention {
         background: rgba(255, 158, 59, 0.08);
         border: 1px solid rgba(255, 158, 59, 0.28);
         border-radius: var(--radius-sm);
         padding: 6px 10px;
+      }
+      .hermes-kanban-host .hermes-kanban-attention--error {
+        background: rgba(255, 107, 61, 0.10);
+        border-color: rgba(255, 107, 61, 0.32);
+      }
+      /* Inner bar/icon/text are background-only rows — no border, no
+       * own radius. They paint over the outer banner's surface. */
+      .hermes-kanban-host .hermes-kanban-attention-bar {
+        background: transparent;
+        border: none;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .hermes-kanban-host .hermes-kanban-attention-icon {
+        background: transparent;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #ff9e3b;
+      }
+      .hermes-kanban-host .hermes-kanban-attention-text {
+        background: transparent;
+        border: none;
+        color: rgba(221, 226, 249, 0.92);
+        font-size: 12.5px;
+      }
+      /* "Show" / "×" controls in the banner — small glass buttons, not
+       * amber-bordered. */
+      .hermes-kanban-host .hermes-kanban-attention-toggle,
+      .hermes-kanban-host .hermes-kanban-attention-dismiss {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--color-muted-foreground);
+        border-radius: 6px;
+        padding: 2px 10px;
+        font-size: 12px;
+        line-height: 1.4;
+        transition: background-color 120ms, border-color 120ms, color 120ms;
+      }
+      .hermes-kanban-host .hermes-kanban-attention-dismiss {
+        padding: 0;
+        width: 26px;
+        height: 26px;
+      }
+      .hermes-kanban-host .hermes-kanban-attention-toggle:hover,
+      .hermes-kanban-host .hermes-kanban-attention-dismiss:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.14);
+        color: var(--color-foreground);
       }
 
       /* Markdown bodies / rendered task descriptions */
