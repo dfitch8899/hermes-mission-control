@@ -98,6 +98,14 @@ async function forward(req: NextRequest, segments: string[]): Promise<Response> 
     respHeaders.set(key, value)
   })
 
+  // SSE-specific belt-and-suspenders: explicitly disable caching + buffering.
+  // The upstream Hermes endpoint already sets these, but if Vercel or any
+  // intermediate adds buffering by default, this overrides it.
+  if (respHeaders.get('content-type')?.includes('text/event-stream')) {
+    respHeaders.set('cache-control',     'no-cache, no-transform')
+    respHeaders.set('x-accel-buffering', 'no')
+  }
+
   return new Response(upstream.body, {
     status:     upstream.status,
     statusText: upstream.statusText,

@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:kanban-sse": "node --test scripts/test-kanban-sse-shim.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",

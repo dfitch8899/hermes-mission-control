@@ -72,16 +72,53 @@ All of these are reached from the browser as `/api/hermes/<same-path>` after MC'
   - 502 if the upstream `fetch` throws (port-forward down, DNS, etc.).
   - Upstream status codes pass through unchanged otherwise.
 
-## WebSocket / live-events caveat
+## Live updates (SSE)
 
-The Hermes kanban plugin uses live updates. If those reach the browser over WebSocket or SSE, route handlers cannot proxy them — Next.js route handlers don't support WebSocket upgrades.
+Mission Control deploys to Vercel, which can't proxy WebSocket upgrades. The
+native kanban plugin's WS code path is transparently converted to
+Server-Sent Events at runtime so live updates work through plain HTTP:
 
-Workarounds, in order of preference:
+```
+Plugin:  new WebSocket('ws://<host>/api/plugins/kanban/events?…')
+   │
+   ▼   intercepted by KanbanEventsShim in lib/hermes-plugin-sdk.ts
+Browser → EventSource('/api/hermes/api/plugins/kanban/events.sse?…')
+   │
+   ▼   forwarded by app/api/hermes/[...path]/route.ts (X-Hermes-Key injected)
+Hermes:  GET /api/plugins/kanban/events.sse
+         (added at boot by hermes-agent/patches/kanban_sse_patch.py)
+         response: text/event-stream, frames {events, cursor} JSON
+```
 
-1. **Verify it's actually broken first.** SSE (Server-Sent Events) is just a long-lived HTTP response and works through the route handler. If Hermes uses SSE not WS, no action needed.
-2. **Dev-only:** allow the iframe document to connect directly to `localhost:9120` for the WS only. CSP and same-origin caveats apply.
-3. **Custom Next.js server:** add a tiny `server.js` that handles `upgrade` events with `http-proxy`. Required for production.
-4. **Polling fallback:** if the plugin supports it, configure a polling interval and skip WS entirely.
+The SSE frame shape matches what the WS endpoint emits, so the plugin's
+`onmessage` handler doesn't notice the transport swap.
+
+`EventSource` auto-reconnects on transient drops and sends `Last-Event-ID`
+so the stream resumes without losing events. If Hermes is unreachable the
+board still renders and manual Refresh still works.
+
+**Required env (unchanged from HTTP path):**
+- `HERMES_DASHBOARD_URL` (or auto-discovered via ECS)
+- `HERMES_SECRET_KEY` (server-only — never reaches the browser)
+
+**Verification:**
+1. Open `/kanban`.
+2. DevTools → Network → confirm `/api/hermes/api/plugins/kanban/events.sse?…`
+   is `200 OK`, `Content-Type: text/event-stream`, and chunks arrive over time.
+3. From another tab (or `curl`), add a comment / move a task. Tab A should
+   update within ~1s without clicking Refresh.
+
+**Test scaffolding:**
+- MC-side regex + URL-derivation: `npm run test:kanban-sse`
+- Hermes-side handler: `pytest tests/plugins/test_kanban_sse.py -q`
+
+**Hermes deploy:**
+The SSE endpoint is added via the patch-at-boot pattern (same as
+`mc_proxy.py` and `kanban_mirror.py`). The ECS task-def `command` base64-decodes
+[hermes-agent/patches/kanban_sse_patch.py](../../hermes-agent/patches/kanban_sse_patch.py)
+at boot and runs it once — idempotent on restart. The script appends a new
+`@router.get("/events.sse")` route to `plugin_api.py` along with a
+dual-mode auth helper (`?token=` OR `X-Hermes-Key`).
 
 ## Failure modes and debugging
 

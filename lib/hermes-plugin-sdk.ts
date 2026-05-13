@@ -245,7 +245,156 @@ export function installHermesPluginSdk(): void {
 
   window.__HERMES_PLUGIN_SDK__ = sdk
   window.__HERMES_PLUGINS__ = pluginsRegistry
+  installKanbanEventsShim()
   installed = true
+}
+
+// ── WebSocket → EventSource shim for kanban live events ──────────────────────
+//
+// Mission Control deploys to Vercel, which can't proxy WebSocket upgrades.
+// The native kanban plugin opens `new WebSocket('ws://<host>/api/plugins/kanban/events?…')`
+// for live task events. We monkey-patch `window.WebSocket` to intercept ONLY
+// that URL and return an `EventSource`-backed shim that quacks like a WebSocket.
+// Everything else (any future plugin that uses WebSocket for something unrelated)
+// falls through to the real constructor.
+//
+// The plugin never calls `.send()` on the events socket — it's a read-only
+// stream. So the shim's `send()` is a no-op with a warning.
+//
+// Hermes serves the SSE mirror at `/events.sse` (added by
+// hermes-agent/patches/kanban_sse_patch.py). Same JSON payload shape per frame
+// as the WS endpoint, so the plugin's `onmessage` handler doesn't notice the
+// transport swap.
+
+const KANBAN_EVENTS_RE = /\/api\/(?:hermes\/api\/)?plugins\/kanban\/events(?:\?|$)/
+
+function installKanbanEventsShim(): void {
+  if (typeof window === 'undefined') return
+  if ((window as unknown as { __kanbanWsShimmed?: boolean }).__kanbanWsShimmed) return
+  ;(window as unknown as { __kanbanWsShimmed?: boolean }).__kanbanWsShimmed = true
+
+  const RealWS = window.WebSocket
+  const Shim = function (this: unknown, url: string | URL, protocols?: string | string[]) {
+    const urlStr = typeof url === 'string' ? url : url.toString()
+    if (KANBAN_EVENTS_RE.test(urlStr)) {
+      return new KanbanEventsShim(urlStr) as unknown as WebSocket
+    }
+    return new RealWS(urlStr, protocols)
+  } as unknown as typeof WebSocket
+
+  // Preserve the readyState constants the plugin reads off the constructor.
+  Object.assign(Shim, {
+    CONNECTING: RealWS.CONNECTING,
+    OPEN:       RealWS.OPEN,
+    CLOSING:    RealWS.CLOSING,
+    CLOSED:     RealWS.CLOSED,
+  })
+  window.WebSocket = Shim
+}
+
+/**
+ * Minimal `WebSocket`-shaped wrapper around `EventSource` for the kanban
+ * /events endpoint. The native plugin only reads `readyState`, sets the four
+ * on* handlers, and calls `close()` — that's the surface this implements.
+ */
+class KanbanEventsShim {
+  static readonly CONNECTING = 0
+  static readonly OPEN       = 1
+  static readonly CLOSING    = 2
+  static readonly CLOSED     = 3
+
+  readonly CONNECTING = 0
+  readonly OPEN       = 1
+  readonly CLOSING    = 2
+  readonly CLOSED     = 3
+
+  readyState     = 0
+  binaryType     = 'blob' as const
+  bufferedAmount = 0
+  extensions     = ''
+  protocol       = ''
+  url:           string
+
+  onopen:    ((this: WebSocket, ev: Event) => unknown)        | null = null
+  onmessage: ((this: WebSocket, ev: MessageEvent) => unknown) | null = null
+  onerror:   ((this: WebSocket, ev: Event) => unknown)        | null = null
+  onclose:   ((this: WebSocket, ev: CloseEvent) => unknown)   | null = null
+
+  private es: EventSource | null = null
+
+  constructor(wsUrl: string) {
+    this.url = wsUrl
+    // ws://host/api/plugins/kanban/events?qs → /api/hermes/api/plugins/kanban/events.sse?qs
+    let qs = ''
+    try {
+      qs = new URL(wsUrl.replace(/^ws/, 'http')).search
+    } catch {
+      const i = wsUrl.indexOf('?')
+      if (i >= 0) qs = wsUrl.slice(i)
+    }
+    const sseUrl = `/api/hermes/api/plugins/kanban/events.sse${qs}`
+
+    try {
+      this.es = new EventSource(sseUrl)
+    } catch (err) {
+      // Synthesize an error event so the plugin's onerror path runs.
+      queueMicrotask(() => this.onerror?.call(this as unknown as WebSocket, new Event('error')))
+      return
+    }
+
+    this.es.onopen = () => {
+      this.readyState = 1
+      this.onopen?.call(this as unknown as WebSocket, new Event('open'))
+    }
+    this.es.onmessage = (e: MessageEvent) => {
+      // Pass through. The plugin parses e.data with JSON.parse, and the
+      // SSE handler emits the same {events, cursor} shape as the WS one.
+      this.onmessage?.call(this as unknown as WebSocket, e)
+    }
+    this.es.onerror = (e: Event) => {
+      // EventSource auto-reconnects unless we close. Surface as ws.onerror
+      // so the plugin can flag degraded liveness, but DON'T close — let the
+      // browser retry transparently.
+      this.onerror?.call(this as unknown as WebSocket, e)
+    }
+  }
+
+  send(_data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+    // The kanban plugin never calls send() on its events socket.
+    if (typeof console !== 'undefined') {
+      console.warn('[hermes-plugin-sdk] kanban events shim ignored .send() — read-only stream')
+    }
+  }
+
+  close(_code?: number, _reason?: string): void {
+    this.es?.close()
+    this.es = null
+    this.readyState = 3
+    const ev = typeof CloseEvent === 'function'
+      ? new CloseEvent('close', { wasClean: true, code: 1000 })
+      : (new Event('close') as unknown as CloseEvent)
+    this.onclose?.call(this as unknown as WebSocket, ev)
+  }
+
+  // EventTarget compatibility — plugin uses on* properties, not addEventListener,
+  // but stub these so libraries that probe addEventListener don't crash.
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
+    const wrapped = (typeof listener === 'function'
+      ? listener
+      : (e: Event) => (listener as EventListenerObject).handleEvent(e)
+    ) as never
+    if (type === 'open')    this.onopen    = wrapped
+    if (type === 'message') this.onmessage = wrapped
+    if (type === 'error')   this.onerror   = wrapped
+    if (type === 'close')   this.onclose   = wrapped
+  }
+  removeEventListener(type: string): void {
+    if (type === 'open')    this.onopen    = null
+    if (type === 'message') this.onmessage = null
+    if (type === 'error')   this.onerror   = null
+    if (type === 'close')   this.onclose   = null
+  }
+  dispatchEvent(_event: Event): boolean { return false }
 }
 
 /** Load a Hermes plugin script tag once. Returns a cached promise on repeat calls. */
