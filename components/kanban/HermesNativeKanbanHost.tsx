@@ -265,6 +265,351 @@ function HermesKanbanLiquidGlass() {
       .hermes-kanban-host ::-webkit-scrollbar-thumb:hover {
         background: rgba(168, 232, 255, 0.32);
       }
+
+      /* ─────────────────────────────────────────────────────────────────
+       * SDK primitives — Liquid Glass surfaces. The SDK shim renders bare
+       * .hermes-sdk-* class names; all styling lives here so it can pick
+       * up CSS vars and backdrop-filter without inlining via Tailwind.
+       * Scoped to .hermes-kanban-host so it can't leak.
+       * ───────────────────────────────────────────────────────────────── */
+
+      /* Card — translucent panel with soft inner highlight */
+      .hermes-kanban-host .hermes-sdk-card {
+        background: color-mix(in srgb, var(--color-card) 88%, transparent);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        box-shadow:
+          0 4px 14px -8px rgba(0, 0, 0, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        color: var(--color-foreground);
+        backdrop-filter: blur(8px) saturate(140%);
+        -webkit-backdrop-filter: blur(8px) saturate(140%);
+      }
+      .hermes-kanban-host .hermes-sdk-card-content {
+        padding: 0.875rem 1rem;
+      }
+
+      /* Badge — soft pill, mono lowercase id-looking text fits this well */
+      .hermes-kanban-host .hermes-sdk-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 9999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.05);
+        padding: 1px 8px;
+        font-size: 10.5px;
+        line-height: 1.5;
+        color: var(--color-muted-foreground);
+        font-family: var(--font-mono);
+        letter-spacing: 0.02em;
+      }
+
+      /* Button — glass-tinted; cyan accent ring on hover */
+      .hermes-kanban-host .hermes-sdk-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        height: 30px;
+        padding: 0 12px;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--color-foreground);
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1;
+        cursor: pointer;
+        transition:
+          background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+          border-color     160ms cubic-bezier(0.23, 1, 0.32, 1),
+          color            160ms cubic-bezier(0.23, 1, 0.32, 1),
+          box-shadow       160ms cubic-bezier(0.23, 1, 0.32, 1),
+          scale             80ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .hermes-kanban-host .hermes-sdk-button:hover:not(:disabled) {
+        background: rgba(60, 215, 255, 0.10);
+        border-color: rgba(60, 215, 255, 0.30);
+        color: #cdf5ff;
+        box-shadow:
+          0 0 0 1px rgba(60, 215, 255, 0.20) inset,
+          0 4px 14px -6px rgba(60, 215, 255, 0.20);
+      }
+      .hermes-kanban-host .hermes-sdk-button:active:not(:disabled) {
+        scale: 0.96;
+      }
+      .hermes-kanban-host .hermes-sdk-button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      /* Inputs / Selects — same glass treatment as buttons for visual harmony */
+      .hermes-kanban-host .hermes-sdk-input,
+      .hermes-kanban-host .hermes-sdk-select {
+        height: 30px;
+        padding: 0 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(13, 19, 35, 0.55);
+        color: var(--color-foreground);
+        font-size: 13px;
+        line-height: 1;
+        outline: none;
+        transition:
+          background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+          border-color     160ms cubic-bezier(0.23, 1, 0.32, 1),
+          box-shadow       160ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .hermes-kanban-host .hermes-sdk-input:focus,
+      .hermes-kanban-host .hermes-sdk-select:focus {
+        border-color: rgba(60, 215, 255, 0.35);
+        box-shadow: 0 0 0 3px rgba(60, 215, 255, 0.12);
+      }
+      .hermes-kanban-host .hermes-sdk-input::placeholder {
+        color: rgba(187, 201, 207, 0.4);
+      }
+      .hermes-kanban-host .hermes-sdk-select option {
+        background: #151b2c;
+        color: var(--color-foreground);
+      }
+
+      .hermes-kanban-host .hermes-sdk-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--color-muted-foreground);
+        font-family: var(--font-mono);
+      }
+
+      /* ─────────────────────────────────────────────────────────────────
+       * Task card detail tweaks — make the card body breathe + tabular IDs
+       * ───────────────────────────────────────────────────────────────── */
+      .hermes-kanban-host .hermes-kanban-card-id {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 10.5px;
+        color: var(--color-muted-foreground);
+        letter-spacing: 0.02em;
+      }
+      .hermes-kanban-host .hermes-kanban-card-title {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--color-foreground);
+        line-height: 1.35;
+        text-wrap: pretty;
+        margin-top: 4px;
+      }
+      .hermes-kanban-host .hermes-kanban-card-meta {
+        font-size: 11px;
+        color: var(--color-muted-foreground);
+        margin-top: 6px;
+      }
+      .hermes-kanban-host .hermes-kanban-unassigned {
+        font-style: italic;
+        color: rgba(187, 201, 207, 0.55);
+      }
+      .hermes-kanban-host .hermes-kanban-ago {
+        font-variant-numeric: tabular-nums;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+      }
+
+      /* Cards that have a stale-red signal — soften the indicator */
+      .hermes-kanban-host .hermes-kanban-card--stale-red .hermes-sdk-card {
+        border-color: rgba(255, 180, 171, 0.35);
+        box-shadow:
+          0 4px 14px -8px rgba(255, 107, 61, 0.18),
+          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      }
+
+      /* ─────────────────────────────────────────────────────────────────
+       * Drawer (task detail panel) — full glass treatment + readable type
+       * ───────────────────────────────────────────────────────────────── */
+      .hermes-kanban-drawer {
+        background: rgba(13, 19, 35, 0.75) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow:
+          -12px 0 40px -16px rgba(0, 0, 0, 0.5),
+          inset 1px 0 0 rgba(255, 255, 255, 0.04) !important;
+        color: var(--color-foreground);
+      }
+      .hermes-kanban-drawer-shade {
+        background: rgba(8, 14, 29, 0.55) !important;
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+      }
+
+      /* Drawer typography — replace any hard-black surfaces inside it */
+      .hermes-kanban-drawer .hermes-sdk-card {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border: 1px solid rgba(255, 255, 255, 0.06) !important;
+      }
+      .hermes-kanban-drawer pre,
+      .hermes-kanban-drawer code {
+        background: rgba(255, 255, 255, 0.04) !important;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        color: rgba(221, 226, 249, 0.92);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .hermes-kanban-drawer pre {
+        padding: 10px 12px;
+        line-height: 1.55;
+        overflow-x: auto;
+      }
+      .hermes-kanban-drawer-head {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 12px 18px !important;
+      }
+      .hermes-kanban-drawer-title {
+        font-size: 15px;
+        font-weight: 500;
+        text-wrap: balance;
+      }
+      .hermes-kanban-drawer-title-text {
+        color: var(--color-foreground);
+      }
+      .hermes-kanban-drawer-meta {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--color-muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+      .hermes-kanban-drawer-body {
+        padding: 14px 18px !important;
+      }
+
+      /* Section headers inside the drawer — "DESCRIPTION", "DEPENDENCIES", etc. */
+      .hermes-kanban-drawer h2,
+      .hermes-kanban-drawer h3,
+      .hermes-kanban-drawer .hermes-kanban-drawer-section-title,
+      .hermes-kanban-drawer [class*="-section-title"],
+      .hermes-kanban-drawer [class*="-section-head"] {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: rgba(60, 215, 255, 0.8);
+        margin: 16px 0 8px;
+      }
+
+      /* Comments + events list rows */
+      .hermes-kanban-drawer .hermes-kanban-drawer-comment-row,
+      .hermes-kanban-drawer [class*="-event"],
+      .hermes-kanban-drawer [class*="-comment"] {
+        border-radius: var(--radius-sm);
+        background: rgba(255, 255, 255, 0.025);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        padding: 8px 10px;
+        margin-bottom: 6px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: rgba(221, 226, 249, 0.92);
+      }
+
+      /* Close button — make it actually look like a control, not a glyph */
+      .hermes-kanban-drawer .hermes-kanban-drawer-close {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        color: var(--color-muted-foreground);
+        transition: background-color 120ms, color 120ms;
+      }
+      .hermes-kanban-drawer .hermes-kanban-drawer-close:hover {
+        background: rgba(255, 107, 61, 0.1);
+        color: #ffb4ab;
+        border-color: rgba(255, 107, 61, 0.25);
+      }
+
+      /* Diagnostics callout — high-contrast amber for the attention banner */
+      .hermes-kanban-drawer [class*="diagnostic"],
+      .hermes-kanban-drawer [class*="-attention"],
+      .hermes-kanban-drawer [class*="-warn"] {
+        background: rgba(255, 158, 59, 0.08) !important;
+        border: 1px solid rgba(255, 158, 59, 0.25) !important;
+        border-radius: var(--radius-sm);
+      }
+
+      /* Status pill at the top of the drawer */
+      .hermes-kanban-drawer [class*="-status"] [class*="-pill"],
+      .hermes-kanban-drawer [class*="status-pill"] {
+        font-family: var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 10.5px;
+        padding: 2px 8px;
+        border-radius: 9999px;
+      }
+
+      /* Top-level toolbar pill ("X tasks needs attention" banner) */
+      .hermes-kanban-host .hermes-kanban-attention,
+      .hermes-kanban-host [class*="kanban-attention"]:not([class*="dot"]) {
+        background: rgba(255, 158, 59, 0.08);
+        border: 1px solid rgba(255, 158, 59, 0.28);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+      }
+
+      /* Markdown bodies / rendered task descriptions */
+      .hermes-kanban-host .hermes-kanban-md,
+      .hermes-kanban-drawer .hermes-kanban-md {
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: rgba(221, 226, 249, 0.92);
+        text-wrap: pretty;
+      }
+      .hermes-kanban-host .hermes-kanban-md a {
+        color: #3cd7ff;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      /* "+ New board" and similar accent buttons */
+      .hermes-kanban-host .hermes-kanban-board-add,
+      .hermes-kanban-host [class*="-board-add"],
+      .hermes-kanban-host [class*="-add-button"] {
+        background: rgba(60, 215, 255, 0.10);
+        border: 1px solid rgba(60, 215, 255, 0.25);
+        color: #cdf5ff;
+      }
+      .hermes-kanban-host .hermes-kanban-board-add:hover,
+      .hermes-kanban-host [class*="-board-add"]:hover,
+      .hermes-kanban-host [class*="-add-button"]:hover {
+        background: rgba(60, 215, 255, 0.18);
+        border-color: rgba(60, 215, 255, 0.45);
+      }
+
+      /* Column add button (the "+" inside each column header) */
+      .hermes-kanban-host .hermes-kanban-column-add {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        color: var(--color-muted-foreground);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        line-height: 1;
+        transition: background-color 120ms, color 120ms, border-color 120ms;
+      }
+      .hermes-kanban-host .hermes-kanban-column-add:hover {
+        background: rgba(60, 215, 255, 0.12);
+        color: #cdf5ff;
+        border-color: rgba(60, 215, 255, 0.30);
+      }
     `}</style>
   )
 }

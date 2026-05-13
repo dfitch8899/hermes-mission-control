@@ -117,33 +117,38 @@ type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
 }
 type OptionProps = React.OptionHTMLAttributes<HTMLOptionElement>
 
+// Minimal, theme-friendly primitives. Only structural classes here — no
+// hardcoded colors that would override MC's Liquid Glass theme tokens.
+// Looks live in `HermesNativeKanbanHost`'s scoped `<style jsx global>` so
+// they can use CSS vars and backdrop-filter without inlining via Tailwind.
+
 const Card = React.forwardRef<HTMLDivElement, DivProps>(({ className, ...p }, ref) =>
-  React.createElement('div', { ref, className: cn('hermes-sdk-card rounded-lg border border-zinc-800 bg-zinc-900 shadow-sm', className), ...p }),
+  React.createElement('div', { ref, className: cn('hermes-sdk-card', className), ...p }),
 )
 Card.displayName = 'Card'
 
 const CardContent = React.forwardRef<HTMLDivElement, DivProps>(({ className, ...p }, ref) =>
-  React.createElement('div', { ref, className: cn('hermes-sdk-card-content p-4', className), ...p }),
+  React.createElement('div', { ref, className: cn('hermes-sdk-card-content', className), ...p }),
 )
 CardContent.displayName = 'CardContent'
 
 const Badge = React.forwardRef<HTMLSpanElement, SpanProps>(({ className, ...p }, ref) =>
-  React.createElement('span', { ref, className: cn('hermes-sdk-badge inline-flex items-center rounded-md border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs', className), ...p }),
+  React.createElement('span', { ref, className: cn('hermes-sdk-badge', className), ...p }),
 )
 Badge.displayName = 'Badge'
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, ...p }, ref) =>
-  React.createElement('button', { ref, className: cn('hermes-sdk-button inline-flex items-center justify-center rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed', className), ...p }),
+  React.createElement('button', { ref, className: cn('hermes-sdk-button', className), ...p }),
 )
 Button.displayName = 'Button'
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, ...p }, ref) =>
-  React.createElement('input', { ref, className: cn('hermes-sdk-input rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm', className), ...p }),
+  React.createElement('input', { ref, className: cn('hermes-sdk-input', className), ...p }),
 )
 Input.displayName = 'Input'
 
 const Label = React.forwardRef<HTMLLabelElement, LabelProps>(({ className, ...p }, ref) =>
-  React.createElement('label', { ref, className: cn('hermes-sdk-label text-sm text-zinc-400', className), ...p }),
+  React.createElement('label', { ref, className: cn('hermes-sdk-label', className), ...p }),
 )
 Label.displayName = 'Label'
 
@@ -156,7 +161,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ className, on
     : onChange
   return React.createElement('select', {
     ref,
-    className: cn('hermes-sdk-select rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm', className),
+    className: cn('hermes-sdk-select', className),
     onChange: handleChange,
     ...p,
   })
