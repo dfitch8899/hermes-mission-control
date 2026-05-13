@@ -72,7 +72,12 @@ export async function getHermesDashboardUrl(): Promise<string> {
   if (cached && cached.expiresAt > now) return cached.url
 
   const url = await _discover()
-  _writeCache({ url, expiresAt: now + 5 * 60 * 1_000 })
+  // 30 min TTL. The discovery is 3 AWS API calls (~1.5s from a laptop);
+  // hammering it on every request is what made the drawer feel slow in
+  // dev mode, since opening a card triggers /tasks/{id} + /home-channels +
+  // /log + maybe /events serially. Cache is invalidated on 5xx/network
+  // errors anyway, so a long TTL doesn't risk staleness across redeploys.
+  _writeCache({ url, expiresAt: now + 30 * 60 * 1_000 })
   return url
 }
 

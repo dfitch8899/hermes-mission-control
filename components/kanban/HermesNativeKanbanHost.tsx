@@ -484,6 +484,61 @@ function HermesKanbanLiquidGlass() {
         padding: 14px 18px !important;
       }
 
+      /* Meta rows (Status / Assignee / Priority / Workspace / Created by).
+       * The plugin renders these as label+value pairs with .hermes-kanban-editable
+       * on values you can click to edit. Make that affordance visible. */
+      .hermes-kanban-drawer .hermes-kanban-meta-row {
+        display: grid;
+        grid-template-columns: 100px 1fr;
+        gap: 10px;
+        align-items: center;
+        padding: 4px 0;
+      }
+      .hermes-kanban-drawer .hermes-kanban-meta-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: rgba(187, 201, 207, 0.55);
+      }
+      .hermes-kanban-drawer .hermes-kanban-meta-value {
+        font-size: 13px;
+        color: var(--color-foreground);
+      }
+      /* Editable values get a chip + edit affordance */
+      .hermes-kanban-drawer .hermes-kanban-editable {
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px dashed rgba(255, 255, 255, 0.10);
+        transition: background-color 120ms, border-color 120ms, color 120ms;
+      }
+      .hermes-kanban-drawer .hermes-kanban-editable::after {
+        content: '✎';
+        font-size: 10px;
+        opacity: 0.5;
+      }
+      .hermes-kanban-drawer .hermes-kanban-editable:hover {
+        background: rgba(60, 215, 255, 0.08);
+        border-color: rgba(60, 215, 255, 0.30);
+        border-style: solid;
+        color: #cdf5ff;
+      }
+      .hermes-kanban-drawer .hermes-kanban-editable:hover::after {
+        opacity: 1;
+        color: #cdf5ff;
+      }
+      /* "unassigned" text inside an editable row reads italicized */
+      .hermes-kanban-drawer .hermes-kanban-editable .hermes-kanban-unassigned {
+        font-style: italic;
+        color: rgba(187, 201, 207, 0.7);
+      }
+
       /* Section headers inside the drawer — "DESCRIPTION", "DEPENDENCIES", etc. */
       .hermes-kanban-drawer h2,
       .hermes-kanban-drawer h3,

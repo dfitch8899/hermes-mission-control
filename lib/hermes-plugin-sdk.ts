@@ -341,26 +341,17 @@ class KanbanEventsShim {
   onclose:   ((this: WebSocket, ev: CloseEvent) => unknown)   | null = null
 
   private es: EventSource | null = null
-  private cycleTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(wsUrl: string) {
     this.url = wsUrl
     this._connect(wsUrl)
-
-    // In dev mode, periodically cycle the connection so Next.js's hot-reload
-    // can swap webpack chunks without a held route-handler module reference.
-    // EventSource auto-reconnects transparently with Last-Event-ID, so the
-    // plugin doesn't see any disruption. In prod this is a no-op since the
-    // dev cycle window is only set when NODE_ENV !== 'production'.
-    if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
-      this.cycleTimer = setInterval(() => {
-        const prev = this.es
-        if (prev && prev.readyState !== 2) {
-          this._connect(wsUrl)
-          prev.close()
-        }
-      }, 45_000)
-    }
+    // Previous versions cycled the EventSource every 45s in dev mode to
+    // give Next.js HMR a clean swap window. That created an exponential
+    // reconnect storm: closing the EventSource fired onclose, the plugin
+    // saw it as a WS disconnect and opened a new one, which created
+    // another shim, which started its own timer, and so on. EventSource
+    // already auto-reconnects on transient errors with Last-Event-ID;
+    // we don't need to help it.
   }
 
   private _connect(wsUrl: string): void {
@@ -407,7 +398,6 @@ class KanbanEventsShim {
   }
 
   close(_code?: number, _reason?: string): void {
-    if (this.cycleTimer) { clearInterval(this.cycleTimer); this.cycleTimer = null }
     this.es?.close()
     this.es = null
     this.readyState = 3
