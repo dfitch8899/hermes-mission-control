@@ -685,25 +685,47 @@ function HermesKanbanLiquidGlass() {
         border-color: rgba(60, 215, 255, 0.45);
       }
 
-      /* Column add button (the "+" / "×" inside each column header) */
+      /* Column add button (the "+" / "×" inside each column header).
+       *
+       * - cursor:pointer so it feels interactive (Tailwind reset removes
+       *   the default button cursor).
+       * - Visible 22×22 box but a ::before pseudo extends the hit area
+       *   to 40×40 (make-interfaces-feel-better minimum). Pointer events
+       *   on the pseudo travel to the parent <button>. */
       .hermes-kanban-host .hermes-kanban-column-add {
+        position: relative;
         width: 22px;
         height: 22px;
         border-radius: 6px;
         background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         color: var(--color-muted-foreground);
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 14px;
+        font-size: 16px;
+        font-weight: 500;
         line-height: 1;
-        transition: background-color 120ms, color 120ms, border-color 120ms;
+        cursor: pointer;
+        transition:
+          background-color 120ms cubic-bezier(0.23, 1, 0.32, 1),
+          color 120ms cubic-bezier(0.23, 1, 0.32, 1),
+          border-color 120ms cubic-bezier(0.23, 1, 0.32, 1),
+          scale 80ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .hermes-kanban-host .hermes-kanban-column-add::before {
+        content: '';
+        position: absolute;
+        inset: -9px;   /* 22 + 18 = 40 → 40×40 hit area */
+        border-radius: 12px;
       }
       .hermes-kanban-host .hermes-kanban-column-add:hover {
-        background: rgba(60, 215, 255, 0.12);
+        background: rgba(60, 215, 255, 0.14);
         color: #cdf5ff;
-        border-color: rgba(60, 215, 255, 0.30);
+        border-color: rgba(60, 215, 255, 0.32);
+      }
+      .hermes-kanban-host .hermes-kanban-column-add:active {
+        scale: 0.96;
       }
 
       /* ─────────────────────────────────────────────────────────────────
