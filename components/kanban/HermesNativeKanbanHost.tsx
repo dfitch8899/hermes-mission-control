@@ -38,16 +38,15 @@ export default function HermesNativeKanbanHost() {
 
     installHermesPluginSdk()
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-    let listener: ((e: Event) => void) | null = null
+    let pollId:    ReturnType<typeof setInterval> | null = null
+    let timeoutId: ReturnType<typeof setTimeout>  | null = null
+    let listener:  ((e: Event) => void)           | null = null
 
-    const promote = () => {
+    const promote = (): boolean => {
       const Plugin = getRegisteredHermesPlugin('kanban')
-      if (Plugin) {
-        if (mounted.current) setState({ kind: 'ready', Plugin })
-        return true
-      }
-      return false
+      if (!Plugin) return false
+      if (mounted.current) setState({ kind: 'ready', Plugin })
+      return true
     }
 
     ;(async () => {
@@ -64,9 +63,24 @@ export default function HermesNativeKanbanHost() {
       }
       // Plugin may register synchronously during script execution OR later.
       if (promote()) return
-      listener = () => { promote() }
+
+      // Belt-and-suspenders: listen for the custom event AND poll the
+      // registry. The poll catches React StrictMode double-mounts where the
+      // event fires between mount#1's cleanup and mount#2's listener
+      // attachment — a race the event alone can lose.
+      listener = () => { if (promote() && pollId) { clearInterval(pollId); pollId = null } }
       window.addEventListener('hermes-plugin-registered', listener)
+
+      pollId = setInterval(() => {
+        if (!mounted.current) {
+          if (pollId) { clearInterval(pollId); pollId = null }
+          return
+        }
+        if (promote() && pollId) { clearInterval(pollId); pollId = null }
+      }, 200)
+
       timeoutId = setTimeout(() => {
+        if (pollId) { clearInterval(pollId); pollId = null }
         if (!mounted.current) return
         if (!getRegisteredHermesPlugin('kanban')) {
           setState({
@@ -80,8 +94,9 @@ export default function HermesNativeKanbanHost() {
 
     return () => {
       mounted.current = false
+      if (pollId)    clearInterval(pollId)
       if (timeoutId) clearTimeout(timeoutId)
-      if (listener) window.removeEventListener('hermes-plugin-registered', listener)
+      if (listener)  window.removeEventListener('hermes-plugin-registered', listener)
     }
   }, [])
 
