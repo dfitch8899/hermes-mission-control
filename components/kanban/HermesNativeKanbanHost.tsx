@@ -112,8 +112,42 @@ export default function HermesNativeKanbanHost() {
 
   const { Plugin } = state
   return (
-    <div className="flex-1 overflow-auto bg-zinc-950 text-zinc-100">
-      <Plugin />
+    <div
+      className="hermes-kanban-host flex-1 overflow-auto bg-surface text-on-background"
+      style={HERMES_THEME_VARS}
+    >
+      <div className="px-6 py-4">
+        <Plugin />
+      </div>
     </div>
   )
+}
+
+/**
+ * Hermes dashboard theme tokens the kanban plugin CSS reads via `var(--…)`.
+ * The dashboard's own SPA defines these; since we're not loading that SPA, we
+ * have to provide them ourselves. Values chosen to align with MC's Liquid
+ * Glass palette in `tailwind.config.ts` so the board reads as part of MC.
+ */
+const HERMES_THEME_VARS: React.CSSProperties = {
+  // Surfaces
+  ['--color-card' as string]:         '#191f30', // surface-container
+  ['--color-card-subtle' as string]:  '#151b2c', // surface-container-low
+  // Text
+  ['--color-foreground' as string]:        '#dde2f9', // on-background
+  ['--color-muted-foreground' as string]:  '#859398', // outline
+  // Lines + focus
+  ['--color-border' as string]:      '#3c494e', // outline-variant
+  ['--color-ring' as string]:        '#3cd7ff', // primary-fixed-dim
+  ['--color-destructive' as string]: '#ffb4ab', // error
+  // Geometry
+  ['--radius' as string]:    '8px',
+  ['--radius-sm' as string]: '4px',
+  // Typography
+  ['--font-mono' as string]: 'var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace',
+  // Plugin-specific tokens
+  ['--hermes-kanban-drawer-width' as string]: '480px',
+  ['--hermes-diag-warning' as string]:  '#ff9e3b',
+  ['--hermes-diag-error' as string]:    '#ff6b3d',
+  ['--hermes-diag-critical' as string]: '#ff4d4d',
 }
