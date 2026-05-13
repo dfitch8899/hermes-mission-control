@@ -152,5 +152,6 @@ export const slackTransport: HermesTransport = {
 
   async exec(command, senderName = 'Mission Control') {
     await postToSlack(command, senderName).catch(() => {})
+    return undefined
   },
 }

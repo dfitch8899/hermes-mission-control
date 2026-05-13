@@ -7,9 +7,16 @@
  * Used by `app/kanban/page.tsx` to host Hermes's native kanban SPA, plugin
  * bundle, plugin CSS, and plugin API under MC's origin so the bundle's
  * root-relative fetches and script src URLs land back on us.
+ *
+ * The upstream URL is resolved via `lib/hermesEndpoint.ts`:
+ *   - If HERMES_DASHBOARD_URL is set to a non-localhost address it is used directly.
+ *   - Otherwise the current Hermes ECS task's public IP is auto-discovered and cached.
+ * A 5xx / network error invalidates the cache so the next request re-discovers
+ * (handles IP changes after a task redeploy).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getHermesDashboardUrl, invalidateHermesEndpointCache } from '@/lib/hermesEndpoint'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -26,10 +33,15 @@ const HOP_BY_HOP = new Set([
 ])
 
 async function forward(req: NextRequest, segments: string[]): Promise<Response> {
-  const base = process.env.HERMES_DASHBOARD_URL?.replace(/\/$/, '')
-  if (!base) {
+  let base: string
+  try {
+    base = await getHermesDashboardUrl()
+  } catch (err) {
     return NextResponse.json(
-      { error: 'HERMES_DASHBOARD_URL not set' },
+      {
+        error:  'Hermes dashboard endpoint could not be resolved',
+        detail: err instanceof Error ? err.message : String(err),
+      },
       { status: 503 },
     )
   }
@@ -60,14 +72,24 @@ async function forward(req: NextRequest, segments: string[]): Promise<Response> 
   try {
     upstream = await fetch(target.toString(), init)
   } catch (err) {
+    // The cached IP may be stale (task got redeployed). Drop the cache so the
+    // next request re-discovers from ECS.
+    invalidateHermesEndpointCache()
     return NextResponse.json(
       {
-        error: 'Hermes dashboard unreachable',
+        error:  'Hermes dashboard unreachable',
         detail: err instanceof Error ? err.message : String(err),
         target: target.toString(),
       },
       { status: 502 },
     )
+  }
+
+  // 5xx from upstream usually means the task is unhealthy or restarting.
+  // Invalidate the discovery cache so the next request rediscovers (covers
+  // the case where ECS spun up a new task on a different IP).
+  if (upstream.status >= 500 && upstream.status < 600) {
+    invalidateHermesEndpointCache()
   }
 
   const respHeaders = new Headers()

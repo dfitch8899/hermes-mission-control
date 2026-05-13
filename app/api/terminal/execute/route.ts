@@ -43,7 +43,7 @@ const CLI_COMMANDS = new Set([
 
 // Full set of commands this endpoint accepts (union of CLI + session commands).
 const HERMES_COMMANDS = new Set([
-  ...CLI_COMMANDS,
+  ...Array.from(CLI_COMMANDS),
   // Hermes CLI extras
   'whatsapp', 'login', 'logout', 'update', 'uninstall',
   // Session-management slash commands
