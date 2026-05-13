@@ -685,7 +685,7 @@ function HermesKanbanLiquidGlass() {
         border-color: rgba(60, 215, 255, 0.45);
       }
 
-      /* Column add button (the "+" inside each column header) */
+      /* Column add button (the "+" / "×" inside each column header) */
       .hermes-kanban-host .hermes-kanban-column-add {
         width: 22px;
         height: 22px;
@@ -704,6 +704,80 @@ function HermesKanbanLiquidGlass() {
         background: rgba(60, 215, 255, 0.12);
         color: #cdf5ff;
         border-color: rgba(60, 215, 255, 0.30);
+      }
+
+      /* ─────────────────────────────────────────────────────────────────
+       * Inline create-task form (the popover that appears below the
+       * column header when you click "+"). The plugin's textarea uses
+       * shadcn-style classes (border-input, focus:ring-ring,
+       * bg-transparent) that are NOT in MC's tailwind config, so the
+       * textarea would otherwise render unstyled and the form looks
+       * "bugged". Style it explicitly here as a glass mini-panel.
+       * ───────────────────────────────────────────────────────────────── */
+      .hermes-kanban-host .hermes-kanban-inline-create {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 8px 0;
+        padding: 10px;
+        border: 1px solid rgba(60, 215, 255, 0.18);
+        border-radius: var(--radius);
+        background: rgba(60, 215, 255, 0.04);
+        box-shadow:
+          0 4px 14px -8px rgba(0, 0, 0, 0.35),
+          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      }
+      .hermes-kanban-host .hermes-kanban-inline-create > .flex {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+      }
+      .hermes-kanban-host .hermes-kanban-inline-create textarea {
+        width: 100%;
+        min-height: 56px;
+        max-height: 160px;
+        resize: vertical;
+        padding: 8px 10px;
+        background: rgba(13, 19, 35, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: var(--radius-sm);
+        color: var(--color-foreground);
+        font-size: 13px;
+        line-height: 1.45;
+        font-family: var(--font-body, var(--font-inter, system-ui));
+        outline: none;
+        transition: border-color 160ms, box-shadow 160ms, background-color 160ms;
+      }
+      .hermes-kanban-host .hermes-kanban-inline-create textarea:focus {
+        border-color: rgba(60, 215, 255, 0.35);
+        background: rgba(13, 19, 35, 0.7);
+        box-shadow: 0 0 0 3px rgba(60, 215, 255, 0.12);
+      }
+      .hermes-kanban-host .hermes-kanban-inline-create textarea::placeholder {
+        color: rgba(187, 201, 207, 0.4);
+        font-style: italic;
+      }
+      .hermes-kanban-host .hermes-kanban-inline-create .hermes-sdk-input,
+      .hermes-kanban-host .hermes-kanban-inline-create .hermes-sdk-select {
+        height: 28px;
+        font-size: 12px;
+        padding: 0 8px;
+      }
+      /* Override the plugin's hardcoded w-16 px width on the priority input
+       * so it doesn't shrink to a tiny box that overlaps "specifier". */
+      .hermes-kanban-host .hermes-kanban-inline-create .hermes-sdk-input.w-16 {
+        width: 64px;
+        flex-shrink: 0;
+      }
+      /* Primary action button (Create) — cyan accent */
+      .hermes-kanban-host .hermes-kanban-inline-create > .flex:last-child .hermes-sdk-button:first-child {
+        background: rgba(60, 215, 255, 0.14);
+        border-color: rgba(60, 215, 255, 0.32);
+        color: #cdf5ff;
+      }
+      .hermes-kanban-host .hermes-kanban-inline-create > .flex:last-child .hermes-sdk-button:first-child:hover {
+        background: rgba(60, 215, 255, 0.22);
+        border-color: rgba(60, 215, 255, 0.48);
       }
     `}</style>
   )
