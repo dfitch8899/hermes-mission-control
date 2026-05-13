@@ -11,14 +11,18 @@
  */
 
 import type { HermesTransport, ChatSendOptions } from './hermesClient.types'
+import { getHermesDashboardUrl, invalidateHermesEndpointCache } from './hermesEndpoint'
 
-const DASHBOARD_URL = process.env.HERMES_DASHBOARD_URL?.replace(/\/$/, '')
-// Reserved for future use when the dashboard session-token auth is wired up.
-// Currently unused: kanban routes are unauthenticated, model routes fall back to Slack.
+// Static key for request auth (same key the proxy checks on every connection).
 const HERMES_KEY = process.env.HERMES_SECRET_KEY
 
 function authHeaders(): HeadersInit {
   return HERMES_KEY ? { 'X-Hermes-Key': HERMES_KEY } : {}
+}
+
+/** Resolves the base URL. Throws on discovery failure so callers can handle it. */
+async function dashboardUrl(): Promise<string> {
+  return getHermesDashboardUrl()
 }
 
 /** Throws "not configured" (fallback trigger) for auth/network errors.
@@ -33,83 +37,144 @@ async function checkResponse(res: Response, context: string): Promise<void> {
 }
 
 export const directTransport: HermesTransport = {
-  async chatSend(_opts: ChatSendOptions): Promise<string | null> {
-    // Phase 3: Requires a streaming SSE /mc/chat endpoint on the Hermes side.
-    // Fall back to Slack until that is implemented.
-    throw new Error('hermesClient.direct: chatSend not yet implemented (Phase 3)')
+  async chatSend(opts: ChatSendOptions): Promise<string | null> {
+    const base = await dashboardUrl()
+
+    const res = await fetch(`${base}/api/mc/chat`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify({ text: opts.text }),
+      signal:  AbortSignal.timeout(120_000),
+    })
+
+    if (!res.ok) {
+      if (res.status === 502) invalidateHermesEndpointCache()
+      const body = await res.text().catch(() => '')
+      throw new Error(`chatSend failed: HTTP ${res.status} — ${body.slice(0, 200)}`)
+    }
+
+    if (!res.body) throw new Error('chatSend: no response body')
+
+    // Parse OpenAI SSE stream:
+    //   data: {"choices":[{"delta":{"content":"..."}}]}
+    //   data: [DONE]
+    const reader  = res.body.getReader()
+    const decoder = new TextDecoder()
+    let accumulated = ''
+    let buf         = ''
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+
+        // Process complete SSE lines
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''   // last partial line stays in buffer
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith('data:')) continue
+          const payload = trimmed.slice(5).trim()
+          if (payload === '[DONE]') break
+
+          try {
+            const chunk = JSON.parse(payload) as {
+              choices?: Array<{ delta?: { content?: string; role?: string } }>
+            }
+            const delta = chunk.choices?.[0]?.delta?.content
+            if (delta) {
+              accumulated += delta
+              opts.onTextUpdate(accumulated)
+            }
+          } catch { /* skip malformed chunks */ }
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    return accumulated || null
   },
 
   async kanbanComplete(taskId, result, _senderName) {
-    if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
+    const base = await dashboardUrl()
     const body: Record<string, unknown> = { status: 'done' }
     if (result) body.result = result
-    const res = await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}`, {
+    const res = await fetch(`${base}/api/plugins/kanban/tasks/${taskId}`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify(body),
     })
+    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
     await checkResponse(res, `kanbanComplete(${taskId})`)
   },
 
   async kanbanBlock(taskId, reason, _senderName) {
-    if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
+    const base = await dashboardUrl()
     // Dashboard API uses block_reason (not reason) per plugin_api.py UpdateTaskBody
     const body: Record<string, unknown> = { status: 'blocked' }
     if (reason) body.block_reason = reason
-    const res = await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}`, {
+    const res = await fetch(`${base}/api/plugins/kanban/tasks/${taskId}`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify(body),
     })
+    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
     await checkResponse(res, `kanbanBlock(${taskId})`)
   },
 
   async kanbanComment(taskId, text, _senderName) {
-    if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
+    const base = await dashboardUrl()
     // Plugin API expects { body: string } per CommentBody model
-    const res = await fetch(`${DASHBOARD_URL}/api/plugins/kanban/tasks/${taskId}/comments`, {
+    const res = await fetch(`${base}/api/plugins/kanban/tasks/${taskId}/comments`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify({ body: text }),
     })
+    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
     await checkResponse(res, `kanbanComment(${taskId})`)
   },
 
   async modelSet(model) {
-    if (!DASHBOARD_URL) throw new Error('HERMES_DASHBOARD_URL not set')
-
-    // Step 1: resolve the current provider (required field for /api/model/set).
-    // /api/model/options needs the auth header on authenticated Hermes builds.
-    let provider = 'openai-codex'  // safe default — overridden below
-    try {
-      const optsRes = await fetch(`${DASHBOARD_URL}/api/model/options`, {
-        headers: authHeaders(),
-        signal:  AbortSignal.timeout(5_000),
-      })
-      if (optsRes.ok) {
-        const optsData = await optsRes.json() as {
-          providers?: Array<{ slug: string; is_current: boolean; models?: string[] }>
-        }
-        const current = optsData.providers?.find(p => p.is_current)
-        if (current) provider = current.slug
-      }
-    } catch { /* use default provider */ }
-
-    // Step 2: set the model.
-    // Do NOT send `scope` — it was a guess and Hermes 422s if it doesn't recognise it.
-    // The dashboard /model command sets globally by default.
-    const res = await fetch(`${DASHBOARD_URL}/api/model/set`, {
+    // `hermes config set model.default <name>` writes directly to
+    // /opt/data/config.yaml.  The api_server reads that file on every fresh
+    // agent instantiation, so the change takes effect on the next chat request.
+    const base = await dashboardUrl()
+    const res = await fetch(`${base}/api/mc/exec`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body:    JSON.stringify({ provider, model }),
-      signal:  AbortSignal.timeout(5_000),
+      body:    JSON.stringify({ command: `config set model.default ${model}` }),
+      signal:  AbortSignal.timeout(15_000),
     })
-    await checkResponse(res, `modelSet(${model})`)
+    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`modelSet failed: HTTP ${res.status} — ${body.slice(0, 200)}`)
+    }
+    const data = await res.json() as { output?: string; exit_code?: number; error?: string }
+    if (data.error) throw new Error(`modelSet: ${data.error}`)
+    if (data.exit_code !== 0) {
+      throw new Error(`modelSet(${model}): exit ${data.exit_code}: ${(data.output ?? '').slice(0, 200)}`)
+    }
   },
 
-  async exec(_command, _senderName) {
-    // Phase 3: Requires a whitelisted /mc/exec endpoint on the Hermes side.
-    // Fall back to Slack until that is implemented.
-    throw new Error('hermesClient.direct: exec not yet implemented (Phase 3)')
+  async exec(command, _senderName) {
+    const base = await dashboardUrl()
+    const res = await fetch(`${base}/api/mc/exec`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify({ command }),
+      signal:  AbortSignal.timeout(35_000),
+    })
+    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`exec failed: HTTP ${res.status} — ${body.slice(0, 200)}`)
+    }
+    const data = await res.json() as { output?: string; exit_code?: number; error?: string }
+    if (data.error) throw new Error(`exec: ${data.error}`)
+    return data.output ?? ''
   },
 }

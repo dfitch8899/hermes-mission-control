@@ -3,56 +3,79 @@
  *
  * Body: { command: string }
  *
- * Sends a command to Hermes via hermesClient.chatSend() and streams the reply
- * back as SSE events (same shape as /api/chat):
+ * Routes the command to Hermes via the appropriate transport:
  *
+ *   CLI_COMMANDS (match mc_proxy EXEC_WHITELIST)
+ *     → hermesClient.exec()  — runs `hermes <cmd>` as a subprocess on ECS.
+ *       Returns full text output in one shot.
+ *
+ *   Everything else (session slash commands: /usage, /new, /stop, /title, …)
+ *     → hermesClient.chatSend() — sends to the api_server, streams the reply.
+ *
+ * Both paths emit the same SSE envelope:
  *   { type: 'status',       message: string }
  *   { type: 'text_replace', text: string }    — accumulated reply text
  *   { type: 'done' }
  *   { type: 'error',        message: string }
- *
- * Allowed commands:
- *   - Any Hermes slash command (/new, /status, /model, /kanban, /usage, etc.)
- *   - Bare-word equivalents without the leading slash
- *
- * This endpoint does NOT expose a raw shell — it only sends chat messages to
- * the Hermes agent, which interprets them as slash commands.
  */
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { hermesClient } from '@/lib/hermesClient'
 
-// Complete set of Hermes CLI slash commands (from docs/reference/slash-commands).
-// Any command whose base matches this set is allowed, with or without the leading /.
+// ── Routing ──────────────────────────────────────────────────────────────────
+//
+// CLI_COMMANDS mirrors mc_proxy's EXEC_WHITELIST exactly.
+// These run as `hermes <cmd>` subprocess → exec path.
+//
+// Every other allowed command is a session slash command and is sent to
+// the api_server via chatSend so Hermes processes it in agent context.
+
+// These run as `hermes <cmd>` subprocess — confirmed non-interactive via live testing.
+// Commands that require a TTY (tools, plugins, gateway, chat, doctor, acp) are
+// intentionally excluded so they fall through to the chatSend path.
+const CLI_COMMANDS = new Set([
+  'model', 'setup', 'auth', 'status', 'cron',
+  'webhook', 'config', 'pairing', 'skills',
+  'memory', 'mcp', 'sessions', 'insights', 'claw',
+  'version', 'profile', 'completion', 'logs',
+])
+
+// Full set of commands this endpoint accepts (union of CLI + session commands).
 const HERMES_COMMANDS = new Set([
-  // Session management
-  'new', 'reset', 'clear', 'stop', 'status', 'history', 'save', 'retry', 'undo',
+  ...CLI_COMMANDS,
+  // Hermes CLI extras
+  'whatsapp', 'login', 'logout', 'update', 'uninstall',
+  // Session-management slash commands
+  'new', 'reset', 'clear', 'stop', 'history', 'save', 'retry', 'undo',
   'title', 'compress', 'rollback', 'snapshot', 'snap', 'branch', 'fork', 'resume', 'redraw',
   // Queue / steering
   'background', 'bg', 'btw', 'queue', 'q', 'steer', 'goal',
-  // Configuration
-  'config', 'model', 'personality', 'verbose', 'fast', 'reasoning', 'skin', 'voice',
+  // Configuration aliases
+  'personality', 'verbose', 'fast', 'reasoning', 'skin', 'voice',
   'yolo', 'footer', 'busy', 'indicator', 'statusbar', 'sb',
-  // Tools & skills
-  'tools', 'toolsets', 'browser', 'skills', 'cron', 'curator',
-  'reload-mcp', 'reload_mcp', 'reload', 'plugins',
-  // Information
-  'help', 'usage', 'insights', 'platforms', 'gateway', 'debug', 'profile',
-  'gquota', 'copy', 'paste', 'image',
+  // Tools & skills aliases
+  'toolsets', 'browser', 'curator', 'reload-mcp', 'reload_mcp', 'reload',
+  // Information aliases
+  'help', 'usage', 'platforms', 'debug', 'gquota', 'copy', 'paste', 'image',
   // Kanban / tasks / profiles
   'kanban', 'tasks', 'profiles',
-  // Messaging-platform-only (allowed so terminal mirrors full Hermes surface)
-  'approve', 'deny', 'sethome', 'update', 'restart', 'commands',
+  // Messaging-platform-only
+  'approve', 'deny', 'sethome', 'restart', 'commands',
   // Exit aliases
   'quit', 'exit',
 ])
 
+function parseBase(command: string): string {
+  return command.trim().replace(/^\//, '').split(/\s+/)[0].toLowerCase()
+}
+
 function isAllowed(command: string): boolean {
-  const cmd = command.trim().toLowerCase()
-  // Strip leading slash (if any) and grab the first word
-  const base = cmd.replace(/^\//, '').split(/\s+/)[0]
-  return HERMES_COMMANDS.has(base)
+  return HERMES_COMMANDS.has(parseBase(command))
+}
+
+function usesCli(command: string): boolean {
+  return CLI_COMMANDS.has(parseBase(command))
 }
 
 export async function POST(req: NextRequest) {
@@ -63,7 +86,7 @@ export async function POST(req: NextRequest) {
 
   if (!isAllowed(command)) {
     return new Response(
-      JSON.stringify({ error: `Command not allowed: "${command.trim().split(/\s+/)[0]}". Type /help for available commands.` }),
+      JSON.stringify({ error: `Command not allowed: "${parseBase(command)}". Type /help for available commands.` }),
       { status: 400 },
     )
   }
@@ -79,23 +102,37 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
 
       try {
-        send({ type: 'status', message: 'Sending to Hermes...' })
+        send({ type: 'status', message: 'Connecting to Hermes...' })
 
-        const reply = await hermesClient.chatSend({
-          text:      command,
-          senderName,
-          agentId:   'terminal',
-          onPermissionRequest: () => { /* not shown in terminal */ },
-          onTextUpdate: (text) => {
-            send({ type: 'text_replace', text })
-          },
-        })
+        if (usesCli(command)) {
+          // ── CLI subprocess path ──────────────────────────────────────────
+          const output = await hermesClient.exec(command, senderName)
+          const reply  = (output ?? '').trim()
+          send({ type: 'text_replace', text: reply || '(no output — command ran silently)' })
+          send({ type: 'done' })
+        } else {
+          // ── Session slash command — api_server chat path ─────────────────
+          // Ensure the command has a leading / so Hermes recognises it as a
+          // slash command rather than a plain chat message.
+          const slashCmd = command.trim().startsWith('/') ? command.trim() : `/${command.trim()}`
 
-        if (!reply) {
-          send({ type: 'text_replace', text: '(no response — Hermes may still be processing)' })
+          let hasUpdate = false
+          const reply = await hermesClient.chatSend({
+            text:      slashCmd,
+            senderName,
+            agentId:   'general',
+            onPermissionRequest: () => { /* terminal ignores permission prompts */ },
+            onTextUpdate: (text) => {
+              hasUpdate = true
+              send({ type: 'text_replace', text })
+            },
+          })
+
+          if (!hasUpdate) {
+            send({ type: 'text_replace', text: reply ?? '(no output — command ran silently)' })
+          }
+          send({ type: 'done' })
         }
-
-        send({ type: 'done' })
       } catch (err) {
         send({ type: 'error', message: String(err) })
       } finally {

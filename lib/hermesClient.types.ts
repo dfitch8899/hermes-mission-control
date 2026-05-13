@@ -55,8 +55,10 @@ export interface HermesTransport {
   modelSet(model: string): Promise<void>
 
   /**
-   * Run an arbitrary command through Hermes (e.g. the memory sync script).
-   * Fire-and-forget — does not throw on failure.
+   * Run a command on Hermes (terminal commands, memory sync, etc.).
+   * Returns the command's output text when called via direct transport;
+   * returns undefined when called via fire-and-forget Slack relay.
+   * Does not throw on failure — errors surface as returned text or logs.
    */
-  exec(command: string, senderName?: string): Promise<void>
+  exec(command: string, senderName?: string): Promise<string | undefined>
 }

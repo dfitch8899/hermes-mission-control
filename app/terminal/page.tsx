@@ -17,7 +17,7 @@ const HERMES_BARE_CMDS = new Set([
   'tools', 'toolsets', 'browser', 'skills', 'cron', 'curator',
   'reload-mcp', 'reload_mcp', 'reload', 'plugins',
   'usage', 'insights', 'platforms', 'gateway', 'debug', 'profile',
-  'gquota', 'copy', 'paste',
+  'gquota', 'copy', 'paste', 'image',
   'approve', 'deny', 'sethome', 'update', 'restart', 'commands',
 ])
 

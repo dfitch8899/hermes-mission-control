@@ -7,10 +7,10 @@
  * Safe to call at any time; never mutates state.
  */
 import { NextResponse } from 'next/server'
+import { getHermesDashboardUrl } from '@/lib/hermesEndpoint'
 
-const DASHBOARD_URL = process.env.HERMES_DASHBOARD_URL?.replace(/\/$/, '')
-const TRANSPORT     = process.env.HERMES_TRANSPORT ?? 'slack'
-const HERMES_KEY    = process.env.HERMES_SECRET_KEY
+const TRANSPORT  = process.env.HERMES_TRANSPORT ?? 'slack'
+const HERMES_KEY = process.env.HERMES_SECRET_KEY
 
 function authHeaders(): HeadersInit {
   return HERMES_KEY ? { 'X-Hermes-Key': HERMES_KEY } : {}
@@ -18,39 +18,58 @@ function authHeaders(): HeadersInit {
 
 export async function GET() {
   const base = {
-    transport:    TRANSPORT,
-    dashboardUrl: DASHBOARD_URL ?? null,
+    transport:     TRANSPORT,
     keyConfigured: !!HERMES_KEY,
-    keyPrefix:    HERMES_KEY ? HERMES_KEY.slice(0, 8) + '…' : null,
+    keyPrefix:     HERMES_KEY ? HERMES_KEY.slice(0, 8) + '…' : null,
   }
 
-  if (TRANSPORT !== 'direct' || !DASHBOARD_URL) {
+  if (TRANSPORT !== 'direct') {
     return NextResponse.json({
       ...base,
       ok:     false,
-      reason: TRANSPORT !== 'direct'
-        ? 'HERMES_TRANSPORT is not "direct" — restart MC after updating .env.local'
-        : 'HERMES_DASHBOARD_URL is not set',
+      reason: 'HERMES_TRANSPORT is not "direct" — restart MC after updating .env.local',
     })
   }
 
-  // 1. Test unauthenticated kanban route (no auth needed — confirms port forward is live)
-  let kanbanReachable = false
-  let kanbanStatus: number | null = null
+  // Resolve the dashboard URL (auto-discovers from ECS if HERMES_DASHBOARD_URL is localhost)
+  let dashboardUrl: string
   try {
-    const r = await fetch(`${DASHBOARD_URL}/api/plugins/kanban/board`, {
-      signal: AbortSignal.timeout(4_000),
+    dashboardUrl = await getHermesDashboardUrl()
+  } catch (err) {
+    return NextResponse.json({
+      ...base,
+      ok:          false,
+      dashboardUrl: null,
+      reason:      `Discovery failed: ${String(err)}`,
     })
-    kanbanStatus    = r.status
-    kanbanReachable = r.ok || r.status === 404  // 404 means route exists but no board — still reachable
-  } catch { /* will show in error below */ }
+  }
 
-  // 2. Test authenticated model/options route (needs X-Hermes-Key)
+  // 1. Primary liveness check — POST /api/mc/exec with "version" (auth required).
+  //    mc_proxy handles this locally without needing the Hermes dashboard running.
+  let execOk     = false
+  let execOutput = ''
+  let execStatus: number | null = null
+  try {
+    const r = await fetch(`${dashboardUrl}/api/mc/exec`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify({ command: 'version' }),
+      signal:  AbortSignal.timeout(10_000),
+    })
+    execStatus = r.status
+    if (r.ok) {
+      const data = await r.json() as { output?: string; exit_code?: number }
+      execOk     = data.exit_code === 0
+      execOutput = data.output ?? ''
+    }
+  } catch { /* connection refused or timeout */ }
+
+  // 2. Optional: authenticated model/options passthrough (requires Hermes dashboard running).
   let modelOk      = false
   let modelStatus: number | null = null
   let modelBody:   unknown       = null
   try {
-    const r = await fetch(`${DASHBOARD_URL}/api/model/options`, {
+    const r = await fetch(`${dashboardUrl}/api/model/options`, {
       headers: authHeaders(),
       signal:  AbortSignal.timeout(4_000),
     })
@@ -63,17 +82,18 @@ export async function GET() {
 
   return NextResponse.json({
     ...base,
-    ok: kanbanReachable && modelOk,
-    kanban: { reachable: kanbanReachable, httpStatus: kanbanStatus },
-    model:  { ok: modelOk, httpStatus: modelStatus, body: modelBody },
-    diagnosis: !kanbanReachable
-      ? 'Port forward not active — run: ./scripts/hermes-forward.sh'
-      : !modelOk && modelStatus === 401
-        ? 'Auth failed — HERMES_SECRET_KEY does not match what Hermes expects'
-        : !modelOk && modelStatus === 403
-          ? 'Forbidden — check patch_web_server.py is running in the Hermes container'
-          : modelOk
-            ? 'All good — direct transport is operational'
-            : `Unexpected error (HTTP ${modelStatus})`,
+    ok:          execOk,
+    dashboardUrl,
+    exec:  { ok: execOk, httpStatus: execStatus, output: execOutput.slice(0, 200) },
+    model: { ok: modelOk, httpStatus: modelStatus, body: modelBody },
+    diagnosis: !execOk && execStatus === null
+      ? `Proxy unreachable at ${dashboardUrl} — check SG port 9120 and mc_proxy.py startup`
+      : !execOk && execStatus === 401
+        ? 'Auth failed — HERMES_SECRET_KEY does not match what mc_proxy expects'
+        : execOk && !modelOk
+          ? 'Exec endpoint OK. Dashboard passthrough unavailable (model/kanban ops use Slack fallback)'
+          : execOk && modelOk
+            ? 'All good — direct transport is fully operational'
+            : `Exec check failed (HTTP ${execStatus})`,
   })
 }
