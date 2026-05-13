@@ -30,14 +30,31 @@ const REGION     = process.env.AWS_DEFAULT_REGION   ?? 'us-east-2'
 const STATIC_URL = process.env.HERMES_DASHBOARD_URL
 
 interface CacheEntry { url: string; expiresAt: number }
-let _cache: CacheEntry | null = null
+
+/**
+ * Persist the cache on `globalThis` instead of a module-level binding so it
+ * survives Next.js dev hot-reloads. Module-level state gets reset every time
+ * webpack re-imports the file (which happens often during HMR), forcing every
+ * request to redo three AWS API calls — ~1.5s of overhead per request, and
+ * 7+ "Discovered Hermes at …" log lines per minute during normal browsing.
+ *
+ * This is the standard Next.js dev pattern for any caches that should
+ * outlive HMR. In production builds it's effectively a regular module
+ * variable since HMR isn't running.
+ */
+const CACHE_KEY = '__hermesEndpointCache__'
+type CacheGlobal = typeof globalThis & { [CACHE_KEY]?: CacheEntry | null }
+const _g = globalThis as CacheGlobal
+
+function _readCache(): CacheEntry | null { return _g[CACHE_KEY] ?? null }
+function _writeCache(v: CacheEntry | null): void { _g[CACHE_KEY] = v }
 
 /**
  * Returns the base URL for the Hermes dashboard/proxy.
  *
  * Priority:
  *  1. HERMES_DASHBOARD_URL env var, if set to a non-localhost address.
- *  2. Cached ECS discovery result (TTL: 5 min).
+ *  2. Cached ECS discovery result (TTL: 5 min, HMR-resilient).
  *  3. Fresh ECS → EC2 discovery.
  */
 export async function getHermesDashboardUrl(): Promise<string> {
@@ -51,16 +68,17 @@ export async function getHermesDashboardUrl(): Promise<string> {
   }
 
   const now = Date.now()
-  if (_cache && _cache.expiresAt > now) return _cache.url
+  const cached = _readCache()
+  if (cached && cached.expiresAt > now) return cached.url
 
   const url = await _discover()
-  _cache = { url, expiresAt: now + 5 * 60 * 1_000 }
+  _writeCache({ url, expiresAt: now + 5 * 60 * 1_000 })
   return url
 }
 
 /** Evict the cache (e.g. after a 502 / connection-refused so next call re-discovers). */
 export function invalidateHermesEndpointCache(): void {
-  _cache = null
+  _writeCache(null)
 }
 
 async function _discover(): Promise<string> {
