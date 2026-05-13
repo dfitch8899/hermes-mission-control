@@ -762,7 +762,7 @@ export default function TerminalPage() {
           const evts: any[] = data.events ?? []
           if (!evts.length) { addLine('info', 'No calendar events found'); return }
           addLine('info', `${evts.length} event${evts.length !== 1 ? 's' : ''}:`)
-          evts.forEach(e => addLine('output', `  ${e.eventId}  [${e.type}]  ${e.cronExpression || e.scheduledAt?.slice(0, 10)}  ${e.title}`))
+          evts.forEach(e => addLine('output', `  ${e.eventId}  [${e.type}]  ${e.schedule || e.scheduleDisplay || e.scheduledAt?.slice(0, 10)}  ${e.title}`))
         } catch { addLine('error', 'Failed to fetch calendar') }
         finally   { setProcessing(false) }
         return

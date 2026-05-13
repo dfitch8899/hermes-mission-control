@@ -1,8 +1,18 @@
+/**
+ * GET  /api/calendar       — read DynamoDB cache (fast).
+ * POST /api/calendar       — create.  Hermes is the source of truth for
+ *                            type='cron' jobs; the DynamoDB write is a cache
+ *                            mirror of what Hermes returned.
+ *
+ * type='planned' events:
+ *   - If `prompt` is provided, registered with Hermes as a one-shot
+ *     (`--repeat 1`, schedule = ISO timestamp from `scheduledAt`).
+ *   - Otherwise stored only in DynamoDB as a calendar marker.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { ddb, TABLES, PutCommand, ScanCommand } from '@/lib/dynamodb'
-import { v4 as uuid } from 'uuid'
 import type { CalendarEvent } from '@/types/calendar'
-import { MOCK_CALENDAR_EVENTS } from '@/lib/mockData'
+import { cronAdd, HermesCronError, type HermesCronJob } from '@/lib/hermesCron'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -29,54 +39,116 @@ export async function GET(req: NextRequest) {
     })
 
     const result = await ddb.send(cmd)
-    return NextResponse.json({ events: result.Items || [] })
+    const items = ((result.Items as CalendarEvent[] | undefined) ?? []).filter(e => !e.tombstoned)
+    return NextResponse.json({ events: items })
   } catch (err) {
     console.error('[api/calendar GET]', err)
-    let events = MOCK_CALENDAR_EVENTS
-    if (type) events = events.filter(e => e.type === type as any)
-    return NextResponse.json({ events, _mock: true })
+    return NextResponse.json({ events: [], error: err instanceof Error ? err.message : String(err) }, { status: 502 })
+  }
+}
+
+function toCalendarEvent(
+  job: HermesCronJob,
+  ui: { type: 'cron' | 'planned'; title: string; description?: string; createdBy: string; scheduledAt: string },
+): CalendarEvent {
+  return {
+    eventId:         job.jobId,
+    hermesJobId:     job.jobId,
+    scheduledAt:     ui.scheduledAt,
+    title:           ui.title,
+    type:            ui.type,
+    description:     ui.description,
+    createdBy:       ui.createdBy,
+    schedule:        job.schedule,
+    scheduleDisplay: job.scheduleDisplay ?? job.schedule,
+    prompt:          job.prompt,
+    skills:          job.skills.length ? job.skills : undefined,
+    state:           job.state,
+    nextRun:         job.nextRunAt ?? ui.scheduledAt,
+    lastRun:         job.lastRunAt,
+    lastRunStatus:   job.lastStatus ?? 'never',
   }
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json()
-    const now = new Date().toISOString()
-    const event: CalendarEvent = {
-      eventId: `EVT-${uuid().slice(0, 8).toUpperCase()}`,
-      scheduledAt: body.scheduledAt || now,
-      title: body.title || 'Untitled Event',
-      type: body.type || 'planned',
-      ...(body.cronExpression && { cronExpression: body.cronExpression }),
-      ...(body.cronHumanReadable && { cronHumanReadable: body.cronHumanReadable }),
-      nextRun: body.nextRun || now,
-      ...(body.lastRun && { lastRun: body.lastRun }),
-      lastRunStatus: body.lastRunStatus || 'never',
-      ...(body.ecsTaskDefinition && { ecsTaskDefinition: body.ecsTaskDefinition }),
-      ...(body.description && { description: body.description }),
-      createdBy: body.createdBy || 'user',
+  let body: Record<string, unknown> = {}
+  try { body = await req.json() } catch { /* tolerate empty body */ }
+
+  const type: 'cron' | 'planned' = body.type === 'cron' ? 'cron' : 'planned'
+  const title       = String(body.title ?? 'Untitled Event').slice(0, 200)
+  const description = body.description ? String(body.description) : undefined
+  const createdBy   = String(body.createdBy ?? 'user')
+  const prompt      = body.prompt ? String(body.prompt) : ''
+  const skills      = Array.isArray(body.skills)
+    ? (body.skills as unknown[]).map(s => String(s).trim()).filter(Boolean)
+    : undefined
+  const scheduledAt = String(body.scheduledAt ?? new Date().toISOString())
+
+  // Determine the Hermes schedule string.
+  // For 'cron': use `body.schedule` verbatim (cron / "every Xm" / etc.).
+  // For 'planned' with prompt: use the ISO timestamp.
+  // For 'planned' without prompt: store as DynamoDB-only calendar marker.
+  const schedule = type === 'cron'
+    ? String(body.schedule ?? body.cronExpression ?? '')
+    : scheduledAt
+
+  // Cron jobs require a prompt — Hermes won't accept an empty add.
+  if (type === 'cron' && !prompt.trim()) {
+    return NextResponse.json({ error: 'prompt is required for cron events' }, { status: 400 })
+  }
+  if (type === 'cron' && !schedule.trim()) {
+    return NextResponse.json({ error: 'schedule is required for cron events' }, { status: 400 })
+  }
+
+  const usesHermes = type === 'cron' || (type === 'planned' && !!prompt.trim())
+
+  if (usesHermes) {
+    try {
+      const job = await cronAdd({
+        schedule,
+        prompt,
+        name: title,
+        skills,
+        repeat: type === 'planned' ? 1 : undefined,
+      })
+      const event = toCalendarEvent(job, { type, title, description, createdBy, scheduledAt })
+
+      try {
+        await ddb.send(new PutCommand({ TableName: TABLES.calendar, Item: event }))
+      } catch (ddbErr) {
+        console.error('[api/calendar POST] DynamoDB mirror failed:', ddbErr)
+        // Hermes job exists; return the event without DDB mirror.
+      }
+      return NextResponse.json({ event }, { status: 201 })
+    } catch (err) {
+      const msg = err instanceof HermesCronError ? err.message : String(err)
+      console.error('[api/calendar POST] Hermes cron add failed:', msg)
+      return NextResponse.json({ error: `Hermes cron add failed: ${msg}` }, { status: 502 })
     }
+  }
 
-    const cmd = new PutCommand({
-      TableName: TABLES.calendar,
-      Item: event,
-    })
-
-    await ddb.send(cmd)
+  // ── Calendar-only path (planned event, no prompt) ──────────────────────
+  const localId = `cal-${Math.random().toString(36).slice(2, 10)}`
+  const event: CalendarEvent = {
+    eventId: localId,
+    hermesJobId: localId,
+    scheduledAt,
+    title,
+    type,
+    description,
+    createdBy,
+    schedule: scheduledAt,
+    scheduleDisplay: 'calendar marker',
+    prompt: '',
+    state: 'scheduled',
+    nextRun: scheduledAt,
+    lastRunStatus: 'never',
+  }
+  try {
+    await ddb.send(new PutCommand({ TableName: TABLES.calendar, Item: event }))
     return NextResponse.json({ event }, { status: 201 })
   } catch (err) {
-    console.error('[api/calendar POST]', err)
-    const body = await req.json().catch(() => ({}))
-    const now = new Date().toISOString()
-    const event: CalendarEvent = {
-      eventId: `EVT-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
-      scheduledAt: now,
-      title: body.title || 'New Event',
-      type: body.type || 'planned',
-      nextRun: body.nextRun || now,
-      lastRunStatus: 'never',
-      createdBy: 'user',
-    }
-    return NextResponse.json({ event, _mock: true }, { status: 201 })
+    console.error('[api/calendar POST] DynamoDB write failed:', err)
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 502 })
   }
 }

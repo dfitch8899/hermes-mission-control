@@ -28,8 +28,11 @@ export default function SideNavBar() {
         boxShadow: '4px 0 32px rgba(0,0,0,0.4), inset -1px 0 0 rgba(60, 215, 255, 0.04)',
       }}
     >
-      {/* Animated right-edge glow line */}
+      {/* Animated right-edge glow line — suppressHydrationWarning silences
+          Dark Reader / other browser extensions that inject CSS vars
+          (--darkreader-*) into the inline style after server render. */}
       <div
+        suppressHydrationWarning
         className="absolute right-0 top-0 bottom-0 w-px pointer-events-none"
         style={{
           background: 'linear-gradient(180deg, transparent 0%, rgba(60,215,255,0.15) 30%, rgba(93,246,224,0.2) 50%, rgba(60,215,255,0.15) 70%, transparent 100%)',

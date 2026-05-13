@@ -40,6 +40,11 @@ const CLI_COMMANDS = new Set([
   'memory', 'mcp', 'sessions', 'insights', 'claw',
   'version', 'profile', 'completion', 'logs',
 ])
+// `cron` is a real top-level CLI subcommand in modern Hermes
+// (hermes_cli/main.py registers it at line ~7123; hermes_cli/cron.py
+// implements list/create/edit/pause/resume/run/remove/status/tick).
+// Subprocess via /api/mc/exec is the right path — it returns the full
+// printed output as a string we can parse.
 
 // Full set of commands this endpoint accepts (union of CLI + session commands).
 const HERMES_COMMANDS = new Set([

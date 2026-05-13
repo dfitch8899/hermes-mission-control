@@ -3,19 +3,24 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import type { CalendarEvent } from '@/types/calendar'
-import EventFormFields, { emptyFormValues, parseSkillsText, type EventFormValues } from './EventFormFields'
+import EventFormFields, { eventToFormValues, parseSkillsText, type EventFormValues } from './EventFormFields'
 
-interface AddEventFormProps {
+interface Props {
+  event: CalendarEvent
   onClose: () => void
-  onAdd: (event: Partial<CalendarEvent>) => Promise<void>
+  onSave: (eventId: string, updates: Partial<CalendarEvent>) => Promise<void>
 }
 
-export default function AddEventForm({ onClose, onAdd }: AddEventFormProps) {
-  const [values, setValues] = useState<EventFormValues>(emptyFormValues)
+export default function EditEventModal({ event, onClose, onSave }: Props) {
+  const [values, setValues] = useState<EventFormValues>(eventToFormValues(event))
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
-  const cronInvalid = values.type === 'cron' && (!values.schedule.trim() || !values.prompt.trim())
+  // Schedule is required for cron edits; prompt is NOT required here.
+  // Synced rows have an empty prompt in DDB (cron list doesn't return it)
+  // and forcing a value would block edits to schedule/skills.  We only
+  // send `prompt` to the server if the user actually typed one.
+  const cronInvalid = values.type === 'cron' && !values.schedule.trim()
   const plannedInvalid = values.type === 'planned' && !values.scheduledAt
   const disabled = saving || !values.title || cronInvalid || plannedInvalid
 
@@ -26,24 +31,25 @@ export default function AddEventForm({ onClose, onAdd }: AddEventFormProps) {
     setError(null)
     try {
       const skills = parseSkillsText(values.skillsText)
-      const payload: Partial<CalendarEvent> & {
-        skills?: string[]
-        scheduledAt?: string
-      } = {
+      const newScheduledAt = values.type === 'planned' && values.scheduledAt
+        ? new Date(values.scheduledAt).toISOString()
+        : event.scheduledAt
+      const newSchedule = values.type === 'cron'
+        ? values.schedule
+        : newScheduledAt
+
+      const updates: Partial<CalendarEvent> & { skills?: string[] } = {
         title: values.title,
-        type: values.type,
         description: values.description || undefined,
-        prompt: values.prompt,
-        skills: skills.length ? skills : undefined,
-        createdBy: 'user',
-        scheduledAt: values.type === 'planned' && values.scheduledAt
-          ? new Date(values.scheduledAt).toISOString()
-          : new Date().toISOString(),
-        schedule: values.type === 'cron'
-          ? values.schedule
-          : (values.scheduledAt ? new Date(values.scheduledAt).toISOString() : new Date().toISOString()),
+        skills,
+        schedule: newSchedule,
+        scheduledAt: newScheduledAt,
       }
-      await onAdd(payload)
+      // Only include `prompt` if the user actually typed one.  An empty
+      // value would otherwise overwrite Hermes's real prompt with ''.
+      if (values.prompt.trim()) updates.prompt = values.prompt
+
+      await onSave(event.eventId, updates)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -63,13 +69,12 @@ export default function AddEventForm({ onClose, onAdd }: AddEventFormProps) {
         style={{ backgroundColor: '#161B22', border: '0.5px solid #30363D' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4"
           style={{ borderBottom: '0.5px solid #30363D' }}
         >
           <span className="text-[11px] font-headline font-bold uppercase tracking-widest" style={{ color: '#FFB300' }}>
-            Add Event
+            Edit Event
           </span>
           <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded" style={{ color: '#8B949E' }}>
             <X size={14} />
@@ -77,7 +82,11 @@ export default function AddEventForm({ onClose, onAdd }: AddEventFormProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <EventFormFields values={values} onChange={setValues} />
+          <EventFormFields values={values} onChange={setValues} lockType />
+
+          <p className="text-[10px] font-mono" style={{ color: '#8B949E' }}>
+            Job ID: <code>{event.hermesJobId}</code>
+          </p>
 
           {error && (
             <p className="text-[11px] font-mono" style={{ color: '#ffb4ab' }}>
@@ -97,7 +106,7 @@ export default function AddEventForm({ onClose, onAdd }: AddEventFormProps) {
               cursor: disabled ? 'not-allowed' : 'pointer',
             }}
           >
-            {saving ? 'Adding...' : 'Add Event'}
+            {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </form>
       </div>

@@ -318,9 +318,9 @@ export default function OverviewPage() {
                     <p className="text-[10px] font-mono mt-0.5 text-outline">
                       <Countdown target={evt.nextRun} />
                     </p>
-                    {evt.cronExpression && (
+                    {evt.type === 'cron' && (evt.scheduleDisplay || evt.schedule) && (
                       <p className="text-[10px] font-mono text-outline">
-                        {evt.cronExpression}
+                        {evt.scheduleDisplay || evt.schedule}
                       </p>
                     )}
                   </div>
