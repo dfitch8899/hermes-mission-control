@@ -131,7 +131,7 @@ export default function HermesNativeKanbanHost() {
       <HermesKanbanLiquidGlass />
       <div
         className="hermes-kanban-host flex-1 overflow-auto text-on-background animate-fade-in-up"
-        style={HERMES_THEME_VARS}
+        style={{ ...HERMES_THEME_VARS, background: 'transparent' }}
       >
         <div className="px-6 py-5">
           <Plugin />
