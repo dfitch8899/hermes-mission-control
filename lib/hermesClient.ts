@@ -73,14 +73,26 @@ function execDirect(): HermesTransport['exec'] {
  * kanban* / modelSet: direct only. NEVER fall back to Slack.
  * Sending these write ops to Slack would pollute the shared channel and
  * cause the Hermes agent to double-apply mutations.
+ *
+ * Two flavors:
+ *
+ *   directOnlyFireAndForget — kanbanComplete + kanbanBlock are advisory
+ *     status updates. The next sync from Hermes will correct any drift,
+ *     so a transient failure shouldn't surface to the caller.
+ *
+ *   directOnlyStrict — kanbanComment + modelSet are mutations whose
+ *     failure has no other path to recovery: a swallowed kanbanComment
+ *     means MC↔Hermes SQLite drifts and the comment is silently lost;
+ *     a swallowed modelSet means DynamoDB records a new model that the
+ *     dashboard never adopted. These re-throw so callers can decide.
  */
-function directOnly<K extends Exclude<keyof HermesTransport, 'chatSend' | 'exec'>>(
+function directOnlyFireAndForget<K extends 'kanbanComplete' | 'kanbanBlock'>(
   method: K,
 ): HermesTransport[K] {
   return (async (...args: Parameters<HermesTransport[K]>) => {
     if (!USE_DIRECT) {
       console.warn(
-        `[hermesClient] directOnly(${method}): HERMES_TRANSPORT is not "direct". Op dropped.`,
+        `[hermesClient] ${method}: HERMES_TRANSPORT is not "direct". Op dropped.`,
       )
       return
     }
@@ -88,17 +100,32 @@ function directOnly<K extends Exclude<keyof HermesTransport, 'chatSend' | 'exec'
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return await (directTransport[method] as (...a: any[]) => Promise<unknown>)(...args)
     } catch (err) {
-      // Log so server console shows the real failure; do NOT Slack.
-      console.warn(`[hermesClient] directOnly(${method}) failed:`, (err as Error).message ?? err)
+      // Log so server console shows the real failure; do NOT Slack and do
+      // NOT propagate — the next sync will correct any drift.
+      console.warn(`[hermesClient] ${method} failed (advisory, swallowed):`, (err as Error).message ?? err)
     }
+  }) as HermesTransport[K]
+}
+
+function directOnlyStrict<K extends 'kanbanComment' | 'modelSet'>(
+  method: K,
+): HermesTransport[K] {
+  return (async (...args: Parameters<HermesTransport[K]>) => {
+    if (!USE_DIRECT) {
+      throw new Error(
+        `${method} requires HERMES_TRANSPORT=direct. Set it in .env.local and restart.`,
+      )
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (directTransport[method] as (...a: any[]) => Promise<unknown>)(...args)
   }) as HermesTransport[K]
 }
 
 export const hermesClient: HermesTransport = {
   chatSend:       chatWithFallback(),
   exec:           execDirect(),
-  kanbanComplete: directOnly('kanbanComplete'),
-  kanbanBlock:    directOnly('kanbanBlock'),
-  kanbanComment:  directOnly('kanbanComment'),
-  modelSet:       directOnly('modelSet'),
+  kanbanComplete: directOnlyFireAndForget('kanbanComplete'),
+  kanbanBlock:    directOnlyFireAndForget('kanbanBlock'),
+  kanbanComment:  directOnlyStrict('kanbanComment'),
+  modelSet:       directOnlyStrict('modelSet'),
 }

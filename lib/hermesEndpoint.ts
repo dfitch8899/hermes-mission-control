@@ -87,6 +87,21 @@ export function invalidateHermesEndpointCache(): void {
 }
 
 /**
+ * Single source of truth for "is this response a sign the cached endpoint
+ * is stale?". Used by both the same-origin proxy and the direct HTTP client.
+ *
+ * Network errors and any 5xx → invalidate. After a redeploy, the old IP
+ * commonly returns 503/504 (LB draining, task starting) before 502; if we
+ * only invalidated on 502 the direct client would keep hammering a dead
+ * IP for the rest of the 30 min TTL.
+ */
+export function shouldInvalidateEndpoint(opts: { status?: number; networkError?: boolean }): boolean {
+  if (opts.networkError) return true
+  const s = opts.status ?? 0
+  return s === 0 || (s >= 500 && s < 600)
+}
+
+/**
  * Fire-and-forget warmup. Call from server components that will later make
  * /api/hermes/* requests so the 1.5 s ECS discovery runs in parallel with
  * HTML streaming instead of stacking in front of the first proxy hit.

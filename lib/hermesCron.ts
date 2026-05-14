@@ -132,7 +132,9 @@ async function withAuthRetry<T>(fn: () => Promise<T>, label: string): Promise<T>
     return await fn()
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    if (!/401|Unauthorized/i.test(msg)) throw err
+    // Use word boundaries so a benign error message containing "401" as part
+    // of a larger number (job count, task ID, port) doesn't trigger a retry.
+    if (!/\b401\b|\bUnauthorized\b/i.test(msg)) throw err
     console.warn(`[hermesCron] ${label} got 401 — invalidating endpoint cache and retrying once`)
     invalidateHermesEndpointCache()
     // Brief pause so any in-flight token state on mc_proxy can settle.
@@ -251,7 +253,11 @@ export function parseCronList(out: string): HermesCronJob[] {
   }
 
   for (const rawLine of lines) {
-    const line = rawLine.replace(/[─-╿]/g, '')  // strip box-drawing
+    // Strip only the box-drawing Unicode block (U+2500-U+257F). The previous
+    // `/[─-╿]/g` ranged U+2500-U+2FFC, which also captures arrows, geometric
+    // shapes, miscellaneous technical, and CJK radicals — way wider than
+    // intended even if today's Hermes output doesn't include those.
+    const line = rawLine.replace(/[─-╿]/g, '')
     if (!line.trim()) { flush(); continue }
     if (/^\s*Scheduled Jobs\s*$/i.test(line)) continue
     if (/^\s*No (active|scheduled) jobs/i.test(line)) continue

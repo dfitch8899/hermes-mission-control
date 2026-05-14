@@ -62,13 +62,15 @@ function timeAgo(input: string | number | Date | null | undefined): string {
     [31_536_000_000, 'mo'],
     [Infinity, 'y'],
   ]
-  let val = 0
-  let unit = 's'
-  let lower = 1
+  // `lower` is the ms-per-unit divisor for the current row. Seeded with the
+  // seconds divisor (1000) so the first row's math is uniform with the rest —
+  // no special-case branch on lower===1.
+  let val   = 1
+  let unit  = 's'
+  let lower = 1000
   for (const [upper, u] of units) {
     if (abs < upper) {
-      const divisor = lower === 1 ? 1000 : lower
-      val = Math.max(1, Math.floor(abs / divisor))
+      val  = Math.max(1, Math.floor(abs / lower))
       unit = u
       break
     }
@@ -368,6 +370,10 @@ class KanbanEventsShim {
     try {
       this.es = new EventSource(sseUrl)
     } catch (err) {
+      // Log the underlying construction error — the synthesized Event('error')
+      // we hand to the plugin carries no detail, so without this the failure
+      // is invisible past "something went wrong" in the plugin's error path.
+      console.warn('[hermes-plugin-sdk] EventSource construction failed:', err)
       // Synthesize an error event so the plugin's onerror path runs.
       queueMicrotask(() => this.onerror?.call(this as unknown as WebSocket, new Event('error')))
       return

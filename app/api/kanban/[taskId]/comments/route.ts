@@ -40,11 +40,15 @@ export async function POST(
 
     // 2. Notify Hermes so its SQLite kanban.db stays in sync.
     //    Best-effort — UI already shows the comment from DDB regardless.
-    hermesClient.kanbanComment(taskId, text, senderName).catch(() => {})
+    //    Log failures so operators can spot a drift between MC and Hermes
+    //    rather than silently swallowing.
+    hermesClient.kanbanComment(taskId, text, senderName).catch((err) => {
+      console.warn(`[api/kanban/${taskId}/comments] hermes mirror failed:`, err instanceof Error ? err.message : err)
+    })
 
     return NextResponse.json({ ok: true, commentId })
   } catch (err) {
     console.error(`[api/kanban/${taskId}/comments POST]`, err)
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -36,7 +36,14 @@ export default function RootLayout({
   // (30 min TTL, globalThis-persistent across HMR) makes warm hits ~free, so this
   // only pays the 1.5 s AWS round-trip once per process and keeps every subsequent
   // /api/hermes/* request out of the discovery critical path.
-  warmHermesEndpoint()
+  //
+  // Skip during `next build` — Next renders the layout once per prerendered
+  // route during static analysis, which previously fired ~19 fresh ECS+EC2
+  // discoveries per build. Wasteful AWS calls and a flaky-network failure
+  // mode that could fail the build. `NEXT_PHASE` is set by Next itself.
+  if (process.env.NEXT_PHASE !== 'phase-production-build') {
+    warmHermesEndpoint()
+  }
 
   return (
     <html lang="en" className={`dark ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>

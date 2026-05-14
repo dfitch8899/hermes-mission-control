@@ -9,8 +9,17 @@
 import type { HermesTransport, ChatSendOptions, PermissionRequest } from './hermesClient.types'
 import { postToSlack } from './slack'
 
-const BOT_TOKEN     = process.env.SLACK_BOT_TOKEN!
-const HERMES_BOT_ID = process.env.HERMES_SLACK_BOT_ID!
+const BOT_TOKEN     = process.env.SLACK_BOT_TOKEN     ?? ''
+const HERMES_BOT_ID = process.env.HERMES_SLACK_BOT_ID ?? ''
+
+function assertSlackConfigured(context: string): void {
+  if (!BOT_TOKEN || !HERMES_BOT_ID) {
+    throw new Error(
+      `slackTransport.${context}: not configured — set SLACK_BOT_TOKEN and HERMES_SLACK_BOT_ID, ` +
+      `or set HERMES_TRANSPORT=direct to bypass Slack`,
+    )
+  }
+}
 
 const POLL_INTERVAL_MS = 1_500
 const POLL_TIMEOUT_MS  = 120_000   // 2 min — enough time to approve a permission prompt
@@ -125,21 +134,25 @@ async function pollForReply(
 
 export const slackTransport: HermesTransport = {
   async chatSend(opts: ChatSendOptions): Promise<string | null> {
+    assertSlackConfigured('chatSend')
     const post = await postToSlack(opts.text, opts.senderName, opts.agentId ?? 'general')
     return pollForReply(post.channel, post.ts, opts.onPermissionRequest, opts.onTextUpdate)
   },
 
   async kanbanComplete(taskId, result, senderName) {
+    assertSlackConfigured('kanbanComplete')
     const suffix = result ? ` "${result}"` : ''
     await postToSlack(`/kanban complete ${taskId}${suffix}`, senderName).catch(() => {})
   },
 
   async kanbanBlock(taskId, reason, senderName) {
+    assertSlackConfigured('kanbanBlock')
     const suffix = reason ? ` "${reason}"` : ''
     await postToSlack(`/kanban block ${taskId}${suffix}`, senderName).catch(() => {})
   },
 
   async kanbanComment(taskId, text, senderName) {
+    assertSlackConfigured('kanbanComment')
     await postToSlack(
       `/kanban comment ${taskId} "${text.replace(/"/g, '\\"')}"`,
       senderName,
@@ -147,11 +160,20 @@ export const slackTransport: HermesTransport = {
   },
 
   async modelSet(model) {
+    assertSlackConfigured('modelSet')
     await postToSlack(`/model ${model}`, 'Mission Control').catch(() => {})
   },
 
-  async exec(command, senderName = 'Mission Control') {
-    await postToSlack(command, senderName).catch(() => {})
-    return undefined
+  async exec(_command, _senderName) {
+    // exec is direct-only per the transport policy in hermesClient.ts:
+    //   "exec: ALWAYS direct — never Slack. If direct transport fails, the
+    //   error surfaces in the terminal rather than leaking to the Slack
+    //   channel."
+    // Posting an exec command into the Slack chat would mis-route it as a
+    // chat message to Hermes. Throw loudly if anyone routes here.
+    throw new Error(
+      'slackTransport.exec is not supported — exec always uses the direct transport ' +
+      '(set HERMES_TRANSPORT=direct)',
+    )
   },
 }

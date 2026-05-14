@@ -11,7 +11,11 @@
  */
 
 import type { HermesTransport, ChatSendOptions } from './hermesClient.types'
-import { getHermesDashboardUrl, invalidateHermesEndpointCache } from './hermesEndpoint'
+import {
+  getHermesDashboardUrl,
+  invalidateHermesEndpointCache,
+  shouldInvalidateEndpoint,
+} from './hermesEndpoint'
 
 // Static key for request auth (same key the proxy checks on every connection).
 const HERMES_KEY = process.env.HERMES_SECRET_KEY
@@ -25,10 +29,21 @@ async function dashboardUrl(): Promise<string> {
   return getHermesDashboardUrl()
 }
 
-/** Throws "not configured" (fallback trigger) for auth/network errors.
- *  Throws descriptive error for genuine API failures. */
+/**
+ * Single error-handling gateway for every direct-transport HTTP response.
+ *
+ *  - 5xx / network: invalidate endpoint cache so next call re-discovers
+ *    after an ECS task replace; throw "not configured" so chatSend can
+ *    fall back to Slack on a draining task.
+ *  - 401 / 403: throw "not configured" (fallback trigger).
+ *  - Other non-2xx: throw a descriptive error with the truncated body.
+ */
 async function checkResponse(res: Response, context: string): Promise<void> {
   if (res.ok) return
+  if (shouldInvalidateEndpoint({ status: res.status })) {
+    invalidateHermesEndpointCache()
+    throw new Error(`not configured: dashboard ${res.status} (cache invalidated) for ${context}`)
+  }
   if (res.status === 401 || res.status === 403) {
     throw new Error(`not configured: dashboard auth required for ${context}`)
   }
@@ -47,11 +62,11 @@ export const directTransport: HermesTransport = {
       signal:  AbortSignal.timeout(120_000),
     })
 
-    if (!res.ok) {
-      if (res.status === 502) invalidateHermesEndpointCache()
-      const body = await res.text().catch(() => '')
-      throw new Error(`chatSend failed: HTTP ${res.status} — ${body.slice(0, 200)}`)
-    }
+    // Use the shared gateway so 401/403/5xx all produce the "not configured"
+    // sentinel that chatWithFallback() in hermesClient.ts checks for. Previously
+    // a 401 here threw "chatSend failed: HTTP 401 …" which didn't match the
+    // fallback substrings — the user got an error instead of Slack relay.
+    await checkResponse(res, 'chatSend')
 
     if (!res.body) throw new Error('chatSend: no response body')
 
@@ -62,9 +77,10 @@ export const directTransport: HermesTransport = {
     const decoder = new TextDecoder()
     let accumulated = ''
     let buf         = ''
+    let streamDone  = false
 
     try {
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read()
         if (done) break
         buf += decoder.decode(value, { stream: true })
@@ -77,7 +93,14 @@ export const directTransport: HermesTransport = {
           const trimmed = line.trim()
           if (!trimmed.startsWith('data:')) continue
           const payload = trimmed.slice(5).trim()
-          if (payload === '[DONE]') break
+          if (payload === '[DONE]') {
+            // Stop reading: some upstream proxies keep the connection open
+            // briefly after [DONE], which previously left the outer while(true)
+            // accumulating bytes until close. Hoisting the flag exits both
+            // loops cleanly.
+            streamDone = true
+            break
+          }
 
           try {
             const chunk = JSON.parse(payload) as {
@@ -107,7 +130,6 @@ export const directTransport: HermesTransport = {
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify(body),
     })
-    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
     await checkResponse(res, `kanbanComplete(${taskId})`)
   },
 
@@ -121,7 +143,6 @@ export const directTransport: HermesTransport = {
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify(body),
     })
-    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
     await checkResponse(res, `kanbanBlock(${taskId})`)
   },
 
@@ -133,11 +154,17 @@ export const directTransport: HermesTransport = {
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body:    JSON.stringify({ body: text }),
     })
-    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
     await checkResponse(res, `kanbanComment(${taskId})`)
   },
 
   async modelSet(model) {
+    // Defense-in-depth: mc_proxy whitespace-splits and doesn't shell-eval,
+    // so `model=foo; rm -rf /` becomes a literal argv token rather than a
+    // separator — but that's a property of an external service. Enforce the
+    // model name shape locally so this layer doesn't depend on it.
+    if (!/^[A-Za-z0-9._:\-/]+$/.test(model)) {
+      throw new Error(`modelSet: invalid model name shape "${model}"`)
+    }
     // `hermes config set model.default <name>` writes directly to
     // /opt/data/config.yaml.  The api_server reads that file on every fresh
     // agent instantiation, so the change takes effect on the next chat request.
@@ -148,11 +175,7 @@ export const directTransport: HermesTransport = {
       body:    JSON.stringify({ command: `config set model.default ${model}` }),
       signal:  AbortSignal.timeout(15_000),
     })
-    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      throw new Error(`modelSet failed: HTTP ${res.status} — ${body.slice(0, 200)}`)
-    }
+    await checkResponse(res, `modelSet(${model})`)
     const data = await res.json() as { output?: string; exit_code?: number; error?: string }
     if (data.error) throw new Error(`modelSet: ${data.error}`)
     if (data.exit_code !== 0) {
@@ -168,11 +191,7 @@ export const directTransport: HermesTransport = {
       body:    JSON.stringify({ command }),
       signal:  AbortSignal.timeout(35_000),
     })
-    if (!res.ok && (res.status === 502 || res.status === 0)) invalidateHermesEndpointCache()
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      throw new Error(`exec failed: HTTP ${res.status} — ${body.slice(0, 200)}`)
-    }
+    await checkResponse(res, 'exec')
     const data = await res.json() as { output?: string; exit_code?: number; error?: string }
     if (data.error) throw new Error(`exec: ${data.error}`)
     return data.output ?? ''

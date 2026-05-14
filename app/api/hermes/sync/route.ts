@@ -54,24 +54,35 @@ export async function POST() {
   // 2. Ask Hermes to run the sync script via hermesClient.exec()
   //    Falls back to Slack relay when HERMES_TRANSPORT is not "direct".
   const syncCommand = 'PYTHONPATH=/opt/data/lib:$PYTHONPATH python3 /opt/data/scripts/sync_to_mc.py'
+  let triggerError: string | null = null
   try {
     await hermesClient.exec(syncCommand, 'Mission Control')
-  } catch {
-    // Non-fatal — fall through and return current meta
+  } catch (err) {
+    // Common failure modes here:
+    //   - HERMES_TRANSPORT != 'direct' (exec is direct-only)
+    //   - Hermes endpoint unreachable / draining
+    //   - sync_to_mc.py errored out (non-zero exit)
+    // All of these mean "no point waiting 30s for a sync that never ran".
+    triggerError = err instanceof Error ? err.message : String(err)
+    console.warn('[api/hermes/sync] exec failed:', triggerError)
   }
 
-  // 3. Poll DynamoDB until the timestamp advances or we time out
-  const deadline = Date.now() + SYNC_TIMEOUT
+  // 3. Poll DynamoDB until the timestamp advances or we time out.
+  //    Short-circuit when we know the trigger never ran — saves 30s of UI
+  //    spinner with no chance of seeing a result.
   let after = before
-
-  while (Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL))
-    after = await getSyncMeta()
-    if (after.lastSyncedAt !== beforeTs) break
+  if (!triggerError) {
+    const deadline = Date.now() + SYNC_TIMEOUT
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, POLL_INTERVAL))
+      after = await getSyncMeta()
+      if (after.lastSyncedAt !== beforeTs) break
+    }
   }
 
   return NextResponse.json({
     ...after,
     synced: after.lastSyncedAt !== beforeTs,
+    ...(triggerError ? { triggerError } : {}),
   })
 }
