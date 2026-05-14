@@ -4,12 +4,21 @@ import { v4 as uuid } from 'uuid'
 import type { Memory } from '@/types/memory'
 import { MOCK_MEMORIES } from '@/lib/mockData'
 
+// Safety cap so a misconfigured caller can't spin DynamoDB indefinitely.
+// One scan page is ~1 MB; 10 pages = up to 10 MB / ~10k items.
+const MEMORIES_MAX_SCAN_PAGES = 10
+const MEMORIES_DEFAULT_LIMIT = 100
+const MEMORIES_MAX_LIMIT = 1000
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const type = searchParams.get('type')
   const source = searchParams.get('source')
   const search = searchParams.get('search')
-  const limit = parseInt(searchParams.get('limit') || '100', 10)
+  const rawLimit = parseInt(searchParams.get('limit') || String(MEMORIES_DEFAULT_LIMIT), 10)
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0
+    ? Math.min(rawLimit, MEMORIES_MAX_LIMIT)
+    : MEMORIES_DEFAULT_LIMIT
 
   try {
     const filterExpressions: string[] = []
@@ -32,20 +41,35 @@ export async function GET(req: NextRequest) {
       expressionAttributeValues[':search'] = search
     }
 
-    const cmd = new ScanCommand({
-      TableName: TABLES.memories,
-      ...(filterExpressions.length > 0 && {
-        FilterExpression: filterExpressions.join(' AND '),
-        ExpressionAttributeValues: expressionAttributeValues,
-        ...(Object.keys(expressionAttributeNames).length > 0 && { ExpressionAttributeNames: expressionAttributeNames }),
-      }),
-      Limit: limit,
-    })
+    // DynamoDB applies `Limit` to the SCANNED items, not post-filter results.
+    // Combining Limit + FilterExpression in a single page would silently drop
+    // valid rows if the first page happens to scan past unfiltered items.
+    // Instead, paginate through the table (capped) and apply our caller limit
+    // after filtering. A GSI on `type` (sort by createdAt) would let us swap
+    // this for a Query — tracked as future infra work.
+    const memories: Memory[] = []
+    let exclusiveStartKey: Record<string, unknown> | undefined
+    let pagesScanned = 0
+    do {
+      const result = await ddb.send(new ScanCommand({
+        TableName: TABLES.memories,
+        ...(filterExpressions.length > 0 && {
+          FilterExpression: filterExpressions.join(' AND '),
+          ExpressionAttributeValues: expressionAttributeValues,
+          ...(Object.keys(expressionAttributeNames).length > 0 && { ExpressionAttributeNames: expressionAttributeNames }),
+        }),
+        ...(exclusiveStartKey && { ExclusiveStartKey: exclusiveStartKey }),
+      }))
+      for (const item of (result.Items || []) as Memory[]) {
+        if (item.memoryId === '_HERMES_SYNC_META') continue
+        memories.push(item)
+        if (memories.length >= limit) break
+      }
+      if (memories.length >= limit) break
+      exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+      pagesScanned += 1
+    } while (exclusiveStartKey && pagesScanned < MEMORIES_MAX_SCAN_PAGES)
 
-    const result = await ddb.send(cmd)
-    const items = (result.Items || []) as Memory[]
-    // Filter out internal sync metadata record
-    const memories = items.filter(m => m.memoryId !== '_HERMES_SYNC_META')
     return NextResponse.json({ memories })
   } catch (err) {
     console.error('[api/memories GET]', err)
