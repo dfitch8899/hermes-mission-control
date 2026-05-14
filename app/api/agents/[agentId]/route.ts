@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ddb, TABLES, QueryCommand, UpdateCommand, DeleteCommand } from '@/lib/dynamodb'
 import type { Agent } from '@/types/agent'
+import { syncAgent, syncDeleteProfile } from '@/lib/hermesProfileSync'
 
 type Ctx = { params: Promise<{ agentId: string }> }
 
@@ -54,6 +55,12 @@ export async function PATCH(req: NextRequest, props: Ctx) {
       ExpressionAttributeValues: exprValues,
     }))
 
+    // Best-effort: push systemPrompt change to Hermes profile (no-op when only
+    // visual fields changed, since the soul payload uses whatever we send).
+    if (body.systemPrompt !== undefined) {
+      void syncAgent({ agentId, systemPrompt: body.systemPrompt })
+    }
+
     return NextResponse.json({ success: true, updatedAt: now })
   } catch (err) {
     console.error('[api/agents/[agentId] PATCH]', err)
@@ -80,6 +87,10 @@ export async function DELETE(_req: NextRequest, props: Ctx) {
       TableName: TABLES.agents,
       Key: { pk: 'AGENT', sk: `AGENT#${agentId}` },
     }))
+
+    // Best-effort: delete the Hermes profile too. Skipped silently if upstream
+    // is unauthenticated (see lib/hermesProfileSync.ts).
+    void syncDeleteProfile(agentId)
 
     return NextResponse.json({ success: true })
   } catch (err) {

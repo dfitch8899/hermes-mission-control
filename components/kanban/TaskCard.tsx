@@ -1,20 +1,11 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { MessageSquare, Link2, ChevronRight } from 'lucide-react'
 import type { KanbanTask } from '@/types/kanban'
+import type { Agent } from '@/types/agent'
+import { lookupAgent } from '@/lib/agents-client'
 
-const AGENT_COLORS: Record<string, string> = {
-  general:   '#3cd7ff',
-  coding:    '#4ade80',
-  marketing: '#f97316',
-  research:  '#a78bfa',
-}
-const AGENT_ICONS: Record<string, string> = {
-  general:   '✨',
-  coding:    '💻',
-  marketing: '📢',
-  research:  '🔬',
-}
 const PRIORITY_COLORS: Record<string, string> = { low: '#859398', normal: '#3cd7ff', high: '#f97316', critical: '#ef4444' }
 
 interface Props {
@@ -24,10 +15,19 @@ interface Props {
 }
 
 export default function TaskCard({ task, onClick, onDragStart }: Props) {
-  const agentColor  = AGENT_COLORS[task.assignee]  ?? '#3cd7ff'
-  const agentIcon   = AGENT_ICONS[task.assignee]   ?? '✨'
+  // Live agent lookup so custom agents render with their chosen icon/color
+  // (the hardcoded built-in map used to hide them as generic blue ✨).
+  // Cleanup guard: if task.assignee changes mid-lookup, drop the stale result.
+  const [agent, setAgent] = useState<Agent | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    lookupAgent(task.assignee).then(a => { if (!cancelled) setAgent(a) })
+    return () => { cancelled = true }
+  }, [task.assignee])
+  const agentColor  = agent?.color ?? '#3cd7ff'
+  const agentIcon   = agent?.icon  ?? '✨'
   const priColor    = PRIORITY_COLORS[task.priority] ?? PRIORITY_COLORS.normal
-  // We don't have completed-child count here; show dep count instead
+  // Dependency count for the link icon (we don't have completed-child counts here).
   const depCount    = task.parentIds.length + task.childIds.length
 
   return (

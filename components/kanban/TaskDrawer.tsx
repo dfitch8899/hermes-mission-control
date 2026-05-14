@@ -4,19 +4,7 @@ import { useEffect, useState } from 'react'
 import { X, MessageSquare, Send, Archive, Bot } from 'lucide-react'
 import type { KanbanTask, KanbanComment } from '@/types/kanban'
 import type { Agent } from '@/types/agent'
-
-const AGENT_COLORS: Record<string, string> = {
-  general:   '#3cd7ff',
-  coding:    '#4ade80',
-  marketing: '#f97316',
-  research:  '#a78bfa',
-}
-const AGENT_ICONS: Record<string, string> = {
-  general:   '✨',
-  coding:    '💻',
-  marketing: '📢',
-  research:  '🔬',
-}
+import { fetchAgents } from '@/lib/agents-client'
 
 const STATUS_LABELS: Record<string, string> = {
   triage: 'Triage', todo: 'To Do', ready: 'Ready',
@@ -49,10 +37,10 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
     const boardParam = task.boardSlug ? `?board=${encodeURIComponent(task.boardSlug)}` : ''
     Promise.all([
       fetch(`/api/kanban/${task.taskId}${boardParam}`).then(r => r.json()),
-      fetch('/api/agents').then(r => r.json()),
-    ]).then(([taskData, agentData]) => {
+      fetchAgents(),  // shared cache — see lib/agents-client.ts
+    ]).then(([taskData, agentList]) => {
       if (taskData.comments) setComments(taskData.comments)
-      if (agentData.agents)  setAgents(agentData.agents)
+      setAgents(agentList)
     }).catch(() => {})
   }, [task.taskId, task.boardSlug])
 
@@ -84,8 +72,10 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
     }
   }
 
-  const agentColor  = AGENT_COLORS[task.assignee] ?? '#3cd7ff'
-  const agentIcon   = AGENT_ICONS[task.assignee]  ?? '✨'
+  const liveAgent   = agents.find(a => a.agentId === task.assignee)
+  const agentColor  = liveAgent?.color ?? '#3cd7ff'
+  const agentIcon   = liveAgent?.icon  ?? '✨'
+  const agentLabel  = liveAgent?.name  ?? task.assignee
   const statusColor = STATUS_COLORS[task.status]  ?? '#859398'
 
   const inputBase = {
@@ -139,7 +129,7 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
                 className="text-[10px] font-mono px-2 py-0.5 rounded-full"
                 style={{ background: `${agentColor}12`, color: agentColor }}
               >
-                {agentIcon} {task.assignee}
+                {agentIcon} {agentLabel}
               </span>
               {task.priority !== 'normal' && (
                 <span
