@@ -1,10 +1,14 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import type { Memory, MemoryType } from '@/types/memory'
 import MemoryCard from './MemoryCard'
 import MemorySearch from './MemorySearch'
-import MemoryReadingView from './MemoryReadingView'
+
+const MemoryReadingView = dynamic(() => import('./MemoryReadingView'), {
+  ssr: false,
+})
 
 interface MemoryGridProps {
   initialMemories: Memory[]

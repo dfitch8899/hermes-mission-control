@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import TopAppBar from '@/components/layout/TopAppBar'
 import CalendarGrid from '@/components/calendar/CalendarGrid'
@@ -24,7 +24,10 @@ export default function CalendarPage() {
   const cronCount    = useMemo(() => events.filter(e => e.type === 'cron').length, [events])
   const plannedCount = useMemo(() => events.filter(e => e.type === 'planned').length, [events])
 
+  const syncInFlight = useRef(false)
   const sync = useCallback(async () => {
+    if (syncInFlight.current) return
+    syncInFlight.current = true
     setSyncing(true)
     setPageError(null)
     try {
@@ -41,21 +44,20 @@ export default function CalendarPage() {
       setPageError(err instanceof Error ? err.message : String(err))
     } finally {
       setSyncing(false)
+      syncInFlight.current = false
     }
   }, [])
 
-  // Sync on mount AND every time the tab becomes visible / window gains focus —
-  // Hermes is the source of truth so we always want a fresh pull when the user
-  // returns to the page.
+  // Sync on mount AND when the tab becomes visible. `focus` would fire alongside
+  // `visibilitychange` on tab return causing a duplicate sync; the in-flight ref
+  // above prevents that, but listening to one event is simpler.
   useEffect(() => {
     void sync()
     const onVisible = () => {
       if (document.visibilityState === 'visible') void sync()
     }
-    window.addEventListener('focus', onVisible)
     document.addEventListener('visibilitychange', onVisible)
     return () => {
-      window.removeEventListener('focus', onVisible)
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [sync])
