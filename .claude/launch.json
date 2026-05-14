@@ -9,6 +9,12 @@
       "autoPort": true
     },
     {
+      "name": "MC Native Kanban Verify",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "-p", "3002"],
+      "port": 3002
+    },
+    {
       "name": "Next.js Start (Production)",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
