@@ -50,13 +50,38 @@ export async function POST() {
     return NextResponse.json({ error: `Hermes cron list failed: ${msg}` }, { status: 502 })
   }
 
-  // 2. Pull current DDB rows.
+  // 2. Pull current DDB rows. Paginate — Scan returns at most 1 MB per page
+  // and a single unpaginated call would silently truncate larger tables.
+  // Critically, the orphan-cleanup pass below DELETES rows it can't see, so
+  // missing a page = data loss. Capped at 100 pages (~100 MB) as a safety.
+  const CALENDAR_MAX_SCAN_PAGES = 100
   let ddbRows: CalendarEvent[] = []
   try {
-    const res = await ddb.send(new ScanCommand({ TableName: TABLES.calendar }))
-    ddbRows = (res.Items as CalendarEvent[] | undefined) ?? []
+    let exclusiveStartKey: Record<string, unknown> | undefined
+    let pagesScanned = 0
+    do {
+      const res = await ddb.send(new ScanCommand({
+        TableName: TABLES.calendar,
+        ...(exclusiveStartKey && { ExclusiveStartKey: exclusiveStartKey }),
+      }))
+      for (const item of (res.Items as CalendarEvent[] | undefined) ?? []) {
+        ddbRows.push(item)
+      }
+      exclusiveStartKey = res.LastEvaluatedKey as Record<string, unknown> | undefined
+      pagesScanned += 1
+    } while (exclusiveStartKey && pagesScanned < CALENDAR_MAX_SCAN_PAGES)
+    if (exclusiveStartKey) {
+      // Safety cap hit. Refuse to run orphan cleanup with an incomplete view
+      // of DDB; that would delete jobs whose pages we never scanned.
+      console.error('[api/calendar/sync] DDB scan hit page cap, aborting to prevent data loss')
+      return NextResponse.json(
+        { error: 'calendar table too large to safely reconcile; bump CALENDAR_MAX_SCAN_PAGES or add a GSI' },
+        { status: 500 },
+      )
+    }
   } catch (err) {
     console.warn('[api/calendar/sync] DynamoDB scan failed, proceeding with empty cache:', err)
+    ddbRows = []
   }
 
   const ddbById = new Map<string, CalendarEvent>(ddbRows.map(r => [r.eventId, r]))
