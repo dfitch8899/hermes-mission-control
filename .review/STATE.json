@@ -1,34 +1,34 @@
 {
-  "iteration": 1,
+  "iteration": 2,
   "started_at": "2026-05-14",
   "areas": [
-    { "name": "hermes-integration", "status": "flagged", "attempts": 1, "priority": 1, "lastFinding": ".review/findings/hermes-integration-iter-1.md", "summary": "3 HIGH + 5 MEDIUM + 8 LOW + 2 H-EXTRA. All FLAGGED per safety rails. Live ping/calendar/update OK; SSE 401 needs browser-session verification." },
-    { "name": "kanban", "status": "pass-with-caveats", "attempts": 1, "priority": 2, "lastFinding": ".review/findings/kanban-iter-1.md", "summary": "No source defects. 4x StrictMode duplication (dev-only). TTFB 1456ms in dev (re-measure in prod)." },
-    { "name": "calendar", "status": "flagged-and-fixed", "attempts": 1, "priority": 3, "lastFinding": ".review/findings/calendar-iter-1.md", "summary": "3 HIGH + 5 MEDIUM + 9 LOW + 5 INFO. H1 dedupe FIXED (commit 0cd3be2). H2 unpaginated Scan deletes orphans = FLAGGED." },
-    { "name": "chat", "status": "flagged", "attempts": 1, "priority": 4, "lastFinding": ".review/findings/chat-iter-1.md", "summary": "2 CRITICAL (no auth on /api/chats; /api/chat/approve missing session check). 7 WARNING. See SECURITY-SUMMARY.md." },
-    { "name": "terminal", "status": "flagged", "attempts": 1, "priority": 5, "lastFinding": ".review/findings/terminal-iter-1.md", "summary": "2 CRITICAL (middleware disabled + allow-list only validates first token = anonymous remote command exec). 9 AUTO-SAFE deferred until auth restored." },
-    { "name": "agents", "status": "flagged", "attempts": 1, "priority": 6, "lastFinding": ".review/findings/agents-iter-1.md", "summary": "3 CRITICAL (no auth on mutations; seed?force=1 overwrites user edits; PATCH zero validation). 6 WARNING. See SECURITY-SUMMARY.md." },
-    { "name": "memory", "status": "flagged-and-fixed", "attempts": 1, "priority": 7, "lastFinding": ".review/findings/memory-iter-1.md", "summary": "3 CRITICAL (no auth; unpaginated Scan + filter-after-limit). WR-02 dynamic-import FIXED (commit 0cd3be2). 6 other WARNING." },
-    { "name": "auth", "status": "flagged", "attempts": 1, "priority": 8, "lastFinding": ".review/findings/SECURITY-SUMMARY.md", "summary": "Middleware fully disabled (matcher: []). Comment says 'Auth temporarily disabled — restore when Google OAuth is configured'. Root cause of CRITICAL findings in chat/terminal/agents/memory." },
-    { "name": "dashboard", "status": "pass", "attempts": 1, "priority": 9, "lastFinding": null, "summary": "Renders, TTFB 511ms (within budget), 11 API calls (5 unique x 2 StrictMode), no console errors." },
-    { "name": "perf-cross-cutting", "status": "pending", "attempts": 0, "priority": 10, "lastFinding": null }
+    { "name": "hermes-integration", "status": "flagged", "attempts": 2, "priority": 1, "lastFinding": ".review/findings/hermes-integration-iter-1.md", "summary": "16 items remain flagged per safety rails (touch lib/hermes**). H-03 docstring fixed iter2 (commit 5212da2)." },
+    { "name": "kanban", "status": "pass-with-caveats", "attempts": 1, "priority": 2, "lastFinding": ".review/findings/kanban-iter-1.md", "summary": "Prod verified: 7 unique API calls (vs 18 dev), TTFB 48ms, no StrictMode duplication, no SSE storm." },
+    { "name": "calendar", "status": "pass-with-flagged", "attempts": 2, "priority": 3, "lastFinding": ".review/findings/calendar-iter-1.md", "summary": "H1 dedupe FIXED iter1 (commit 0cd3be2). H2 unpaginated Scan in orphan cleanup remains FLAGGED — touches Hermes sync/destructive path." },
+    { "name": "chat", "status": "auth-resolved", "attempts": 2, "priority": 4, "lastFinding": ".review/findings/chat-iter-1.md", "summary": "Both CRITICAL (CR-01 /api/chats no auth, CR-02 /api/chat/approve no session check) RESOLVED by middleware iter2 (commit 0a2cecb). 7 WARNING items remain as quality improvements." },
+    { "name": "terminal", "status": "auth-resolved-partial", "attempts": 2, "priority": 5, "lastFinding": ".review/findings/terminal-iter-1.md", "summary": "CR-01 (anonymous /api/terminal/execute) RESOLVED by middleware iter2. CR-02 (allow-list only validates first token) remains FLAGGED as defense-in-depth — exploitability now requires basic-auth creds. parseInt radix fixed iter2 (commit 5212da2)." },
+    { "name": "agents", "status": "auth-resolved-fixed", "attempts": 2, "priority": 6, "lastFinding": ".review/findings/agents-iter-1.md", "summary": "CR-01 (no auth on mutations) RESOLVED by middleware iter2. CR-02 (seed?force=1 wipes user edits) FIXED iter2 (commit 5212da2). WR-05 (String(err) leak) FIXED iter2." },
+    { "name": "memory", "status": "auth-resolved-fixed", "attempts": 2, "priority": 7, "lastFinding": ".review/findings/memory-iter-1.md", "summary": "CR-01 (no auth) RESOLVED by middleware iter2. CR-02 (unpaginated Scan + filter-after-limit) remains FLAGGED — touches DDB schema. WR-02 dynamic-import FIXED iter1 (commit 0cd3be2). WR-06 animation cascade FIXED iter2. parseInt radix fixed iter2." },
+    { "name": "auth", "status": "pass", "attempts": 2, "priority": 8, "lastFinding": ".review/findings/SECURITY-SUMMARY.md", "summary": "Middleware re-enabled with HTTP Basic Auth gate iter2 (commit 0a2cecb). Verified end-to-end via curl: anonymous=401, correct creds=200, wrong creds=401, hermes webhook bypass works. MC_USERNAME+MC_PASSWORD now required for any deployment." },
+    { "name": "dashboard", "status": "pass", "attempts": 1, "priority": 9, "lastFinding": null, "summary": "Renders, TTFB 511ms (within budget), 11 API calls (5 unique x 2 StrictMode in dev), no console errors." },
+    { "name": "perf-cross-cutting", "status": "pass", "attempts": 1, "priority": 10, "lastFinding": ".review/findings/perf-cross-cutting-iter-1.md", "summary": "All prod TTFB 6-52ms (budget 800ms). All bundles under 300KB First Load JS. /memory -47KB win confirmed. StrictMode 4x confirmed dev-only. SSE storm fix holding." }
   ],
   "global_pass_count": 0,
   "max_attempts_per_area": 5,
   "max_global_passes": 3,
-  "flagged_items": [
-    "CRITICAL-AUTH: middleware.ts disabled — opens chat/terminal/agents/memory mutation surface",
-    "CRITICAL-TERMINAL: anonymous remote command exec via /api/terminal/execute (CR-01+CR-02)",
-    "CRITICAL-CHAT: /api/chats GET/POST/DELETE open + chatId only 20 bits enumerable",
-    "CRITICAL-CHAT: /api/chat/approve missing session check",
-    "CRITICAL-AGENTS: seed?force=1 wipes user customizations (CR-02)",
-    "CRITICAL-MEMORY: PUT accepts arbitrary Partial<Memory> with no whitelist",
-    "HIGH-CALENDAR: H2 unpaginated Scan in orphan-cleanup deletes valid rows once table > 1MB",
-    "HIGH-HERMES: 16 items from hermes-integration-iter-1.md (directOnly swallow, cache invalidation drift, SSE [DONE] loop, etc.)",
-    "BUILD: next@14.2.5 critical security advisory; major upgrade out of auto-fix scope"
+  "flagged_items_remaining": [
+    "terminal/CR-02: allow-list only validates first token (defense-in-depth, gated by basic auth)",
+    "memory/CR-02: unpaginated Scan with filter-after-limit silently drops rows",
+    "calendar/H2: unpaginated Scan in orphan-cleanup deletes valid rows once table > 1MB",
+    "hermes-integration: 15 remaining items in lib/hermes** (H-01 directOnly swallow, H-02/M-01 cache invalidation drift, M-02 chatSend 401 fallback, M-03 SSE [DONE] loop, M-04 build-time warmup storm, M-06 sync 30s spinner, L-01..L-08 minor)",
+    "BUILD: next@14.2.5 critical security advisory (major upgrade out of scope)"
   ],
-  "auto_safe_fixes_applied": [
-    "calendar: dedupe sync to 1 per load (commit 0cd3be2)",
-    "memory: dynamic-import MemoryReadingView (commit 0cd3be2)"
+  "fixes_shipped_iter2": [
+    "feat(auth): HTTP Basic Auth middleware (commit 0a2cecb) — closes 5/6 CRITICAL",
+    "agents seed?force=1 user-edit preservation (commit 5212da2)",
+    "agents String(err) -> generic + server log (commit 5212da2)",
+    "parseInt radix 10 in terminal/ecs-logs/memories (commit 5212da2)",
+    "memory card animation cascade cap (commit 5212da2)",
+    "hermesEndpoint TTL docstring 5min->30min (commit 5212da2)"
   ]
 }
