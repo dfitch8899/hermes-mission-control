@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     console.error('[api/memories POST]', err)
     const now = new Date().toISOString()
     const memory: Memory = {
-      memoryId: `MEM-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+      memoryId: `MEM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
       createdAt: now,
       updatedAt: now,
       title: 'New Memory',

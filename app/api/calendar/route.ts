@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Calendar-only path (planned event, no prompt) ──────────────────────
-  const localId = `cal-${Math.random().toString(36).slice(2, 10)}`
+  const localId = `cal-${crypto.randomUUID().slice(0, 12)}`
   const event: CalendarEvent = {
     eventId: localId,
     hermesJobId: localId,

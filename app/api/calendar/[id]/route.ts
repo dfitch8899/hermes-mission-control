@@ -291,8 +291,14 @@ export async function DELETE(_req: NextRequest, props: Params) {
     const msg = err instanceof Error ? err.message : String(err)
     const stack = err instanceof Error ? err.stack : undefined
     console.error(`[DELETE /api/calendar/${id}] UNCAUGHT:`, msg, stack)
+    // Stack trace only in development — production would leak internal paths
+    // and library implementation detail to whoever can reach the route.
+    const isDev = process.env.NODE_ENV !== 'production'
     return NextResponse.json(
-      { error: `Unhandled server error: ${msg}`, _stack: stack?.split('\n').slice(0, 5).join('\n') },
+      {
+        error: `Unhandled server error: ${msg}`,
+        ...(isDev && stack ? { _stack: stack.split('\n').slice(0, 5).join('\n') } : {}),
+      },
       { status: 500 },
     )
   }

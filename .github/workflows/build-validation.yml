@@ -34,6 +34,14 @@ jobs:
       - name: Disable Next.js telemetry
         run: npx next telemetry disable
 
+      # Fast-fail on type errors before the slower production build —
+      # surfaces TS errors with better output and shaves the feedback loop
+      # for type-only mistakes from ~minutes to seconds.
+      - name: Typecheck
+        env:
+          CI: true
+        run: npm run typecheck
+
       - name: Build app
         env:
           CI: true

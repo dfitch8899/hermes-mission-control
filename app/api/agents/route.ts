@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as Partial<Agent>
     const now     = new Date().toISOString()
-    const agentId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const agentId = `agent-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`
 
     const agent: Agent = {
       agentId,

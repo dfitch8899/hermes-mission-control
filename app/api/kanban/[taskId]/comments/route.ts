@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ taskId: 
     const session    = await getServerSession(authOptions)
     const senderName = session?.user?.name ?? session?.user?.email ?? 'me'
     const now        = new Date().toISOString()
-    const commentId  = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const commentId  = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`
 
     // 1. Persist directly to DynamoDB — visible immediately in the task drawer.
     await ddb.send(new PutCommand({

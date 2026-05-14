@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   try {
     const body    = await req.json().catch(() => ({})) as Record<string, string>
     const now     = new Date().toISOString()
-    const chatId  = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const chatId  = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`
     const title   = (body.title   ?? '').slice(0, 80) || 'New Chat'
     const preview = (body.preview ?? '').slice(0, 120)
 

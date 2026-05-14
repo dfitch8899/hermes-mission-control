@@ -12,7 +12,7 @@ export type { PermissionRequest }
 /** Create a new chat record and return its chatId */
 async function createChatRecord(firstMessage: string, agentId?: string): Promise<string> {
   const now    = new Date().toISOString()
-  const chatId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  const chatId = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`
   const title  = firstMessage.slice(0, 80) + (firstMessage.length > 80 ? '…' : '')
   const preview = firstMessage.slice(0, 120)
 
@@ -26,7 +26,7 @@ async function createChatRecord(firstMessage: string, agentId?: string): Promise
 /** Append a message to a chat */
 async function saveMessageRecord(chatId: string, role: 'user' | 'assistant', content: string): Promise<void> {
   const now   = new Date().toISOString()
-  const msgId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  const msgId = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`
   const sk    = `MSG#${now}#${msgId}`
 
   await ddb.send(new PutCommand({

@@ -137,7 +137,9 @@ export default function CalendarPage() {
       console.log(`[calendar.delete] status=${res.status} body=${JSON.stringify(body, null, 2)}`)
       if (!res.ok) {
         throw new Error(
-          `[${res.status}] ${body?.error ?? '(empty body)'}` +
+          // `??` lets empty strings through; `||` falls back to '(empty body)'
+          // when the server returned { error: "" } or omitted the key entirely.
+          `[${res.status}] ${body?.error || '(empty body)'}` +
           (body?._path ? `  path=${body._path}` : '') +
           (body?._stack ? `\n${body._stack}` : ''),
         )
