@@ -10,10 +10,8 @@ import { hermesClient } from '@/lib/hermesClient'
  *     immediately (no mirror round-trip required).
  *  2. Also notifies Hermes via the command client so the SQLite DB stays in sync.
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { taskId: string } },
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
+  const params = await props.params;
   const { taskId } = params
   try {
     const body = await req.json().catch(() => ({})) as { text?: string }

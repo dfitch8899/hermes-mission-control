@@ -9,6 +9,11 @@
 import { NextResponse } from 'next/server'
 import { getHermesDashboardUrl } from '@/lib/hermesEndpoint'
 
+// Next 15 changed Route Handler GET to be dynamic by default, but be explicit
+// — this handler probes live AWS/Hermes state and must never be statically
+// cached, regardless of future framework default changes.
+export const dynamic = 'force-dynamic'
+
 const TRANSPORT  = process.env.HERMES_TRANSPORT ?? 'slack'
 const HERMES_KEY = process.env.HERMES_SECRET_KEY
 

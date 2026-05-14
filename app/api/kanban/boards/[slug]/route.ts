@@ -8,10 +8,8 @@ const BOARD_META_PK = 'BOARD_META'
  * Removes the board metadata entry and all task items that live under that
  * board's partition key.  The "default" board cannot be deleted.
  */
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { slug: string } },
-) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const { slug } = params
 
   if (slug === 'default') {

@@ -3,10 +3,11 @@ import { ddb, TABLES, GetCommand, UpdateCommand, DeleteCommand } from '@/lib/dyn
 import type { Memory } from '@/types/memory'
 
 interface Params {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(_req: NextRequest, props: Params) {
+  const params = await props.params;
   try {
     const cmd = new GetCommand({
       TableName: TABLES.memories,
@@ -23,7 +24,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 }
 
-export async function PUT(req: NextRequest, { params }: Params) {
+export async function PUT(req: NextRequest, props: Params) {
+  const params = await props.params;
   try {
     const body: Partial<Memory> = await req.json()
     const now = new Date().toISOString()
@@ -63,7 +65,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(_req: NextRequest, props: Params) {
+  const params = await props.params;
   try {
     const cmd = new DeleteCommand({
       TableName: TABLES.memories,

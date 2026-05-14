@@ -1,0 +1,79 @@
+
+> hermes-mission-control@1.0.0 build
+> next build
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\kfitc\hermes-mission-control\package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\package-lock.json
+
+   ▲ Next.js 15.5.18
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 13.4s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/30) ...
+   Generating static pages (7/30) 
+   Generating static pages (14/30) 
+   Generating static pages (22/30) 
+ ✓ Generating static pages (30/30)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                    4.65 kB         116 kB
+├ ○ /_not-found                            998 B         104 kB
+├ ○ /agents                              6.55 kB         109 kB
+├ ƒ /api/agents                            211 B         103 kB
+├ ƒ /api/agents/[agentId]                  211 B         103 kB
+├ ƒ /api/agents/seed                       211 B         103 kB
+├ ƒ /api/auth/[...nextauth]                211 B         103 kB
+├ ƒ /api/calendar                          211 B         103 kB
+├ ƒ /api/calendar/[id]                     211 B         103 kB
+├ ƒ /api/calendar/[id]/pause               211 B         103 kB
+├ ƒ /api/calendar/[id]/resume              211 B         103 kB
+├ ƒ /api/calendar/[id]/run                 211 B         103 kB
+├ ƒ /api/calendar/sync                     211 B         103 kB
+├ ƒ /api/chat                              211 B         103 kB
+├ ƒ /api/chat/approve                      211 B         103 kB
+├ ƒ /api/chats                             211 B         103 kB
+├ ƒ /api/chats/[chatId]                    211 B         103 kB
+├ ƒ /api/ecs/logs                          211 B         103 kB
+├ ƒ /api/ecs/metrics                       211 B         103 kB
+├ ƒ /api/ecs/tasks                         211 B         103 kB
+├ ƒ /api/hermes/[...path]                  211 B         103 kB
+├ ƒ /api/hermes/model                      211 B         103 kB
+├ ƒ /api/hermes/ping                       211 B         103 kB
+├ ƒ /api/hermes/sync                       211 B         103 kB
+├ ƒ /api/hermes/update                     211 B         103 kB
+├ ƒ /api/kanban                            211 B         103 kB
+├ ƒ /api/kanban/[taskId]                   211 B         103 kB
+├ ƒ /api/kanban/[taskId]/comments          211 B         103 kB
+├ ƒ /api/kanban/boards                     211 B         103 kB
+├ ƒ /api/kanban/boards/[slug]              211 B         103 kB
+├ ƒ /api/kanban/events                     211 B         103 kB
+├ ƒ /api/memories                          211 B         103 kB
+├ ƒ /api/memories/[id]                     211 B         103 kB
+├ ƒ /api/terminal/execute                  211 B         103 kB
+├ ○ /auth/error                           1.8 kB         104 kB
+├ ○ /auth/signin                         10.9 kB         113 kB
+├ ○ /calendar                            13.5 kB         120 kB
+├ ○ /chat                                9.62 kB         112 kB
+├ ƒ /kanban                              12.8 kB         115 kB
+├ ○ /memory                              4.87 kB         117 kB
+└ ○ /terminal                            11.3 kB         114 kB
++ First Load JS shared by all             103 kB
+  ├ chunks/1255-b28ea36bf0cdbd65.js      46.2 kB
+  ├ chunks/4bd1b696-f785427dddbba9fb.js  54.2 kB
+  └ other shared chunks (total)           2.1 kB
+
+
+ƒ Middleware                             34.1 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -17,7 +17,7 @@ import { ddb, TABLES, GetCommand, PutCommand, UpdateCommand, DeleteCommand } fro
 import type { CalendarEvent } from '@/types/calendar'
 import { cronEdit, cronRemove, cronPause, lastCronRemoveDiagnostic, HermesCronError } from '@/lib/hermesCron'
 
-interface Params { params: { id: string } }
+interface Params { params: Promise<{ id: string }> }
 
 async function loadEvent(eventId: string): Promise<CalendarEvent | null> {
   const result = await ddb.send(new GetCommand({ TableName: TABLES.calendar, Key: { eventId } }))
@@ -36,7 +36,8 @@ function isCalendarMarker(ev: CalendarEvent | null): boolean {
   return !!ev && typeof ev.eventId === 'string' && ev.eventId.startsWith('cal-')
 }
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(_req: NextRequest, props: Params) {
+  const params = await props.params;
   try {
     const event = await loadEvent(params.id)
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
@@ -47,7 +48,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 }
 
-export async function PUT(req: NextRequest, { params }: Params) {
+export async function PUT(req: NextRequest, props: Params) {
+  const params = await props.params;
   let body: Partial<CalendarEvent> = {}
   try { body = await req.json() } catch { /* empty */ }
 
@@ -148,7 +150,8 @@ async function mirrorToDynamo(eventId: string, body: Partial<CalendarEvent>) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(_req: NextRequest, props: Params) {
+  const params = await props.params;
   const id = params.id
   console.log(`[DELETE /api/calendar/${id}] start`)
 

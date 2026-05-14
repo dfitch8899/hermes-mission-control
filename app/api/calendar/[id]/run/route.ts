@@ -5,7 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cronRun, HermesCronError } from '@/lib/hermesCron'
 
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await cronRun(params.id)
     return NextResponse.json({ success: true })

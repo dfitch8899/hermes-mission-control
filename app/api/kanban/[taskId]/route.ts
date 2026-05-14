@@ -8,10 +8,8 @@ import type { KanbanTask, KanbanComment } from '@/types/kanban'
 /** GET /api/kanban/[taskId] — single task + comment thread
  *  ?board=<slug>  optional (default "default")
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { taskId: string } },
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
+  const params = await props.params;
   const { taskId } = params
   const board = new URL(req.url).searchParams.get('board') ?? 'default'
   const boardPk = `BOARD#${board}`
@@ -73,10 +71,8 @@ export async function GET(
  *  (assignee, title, priority, archive) are DDB-only to avoid Slack
  *  pollution from Hermes LLM misinterpreting the slash commands.
  */
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { taskId: string } },
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
+  const params = await props.params;
   const { taskId } = params
   const board     = new URL(req.url).searchParams.get('board') ?? 'default'
   const boardPk   = `BOARD#${board}`

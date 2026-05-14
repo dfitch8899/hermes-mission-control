@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ddb, TABLES, QueryCommand, PutCommand, UpdateCommand, DeleteCommand } from '@/lib/dynamodb'
 import type { Agent } from '@/types/agent'
 
-type Ctx = { params: { agentId: string } }
+type Ctx = { params: Promise<{ agentId: string }> }
 
 /** GET /api/agents/[agentId] */
-export async function GET(_req: NextRequest, { params }: Ctx) {
+export async function GET(_req: NextRequest, props: Ctx) {
+  const params = await props.params;
   const { agentId } = params
   try {
     const result = await ddb.send(new QueryCommand({
@@ -23,7 +24,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 }
 
 /** PATCH /api/agents/[agentId] — update mutable fields */
-export async function PATCH(req: NextRequest, { params }: Ctx) {
+export async function PATCH(req: NextRequest, props: Ctx) {
+  const params = await props.params;
   const { agentId } = params
   try {
     const body = await req.json() as Partial<Agent>
@@ -60,7 +62,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 /** DELETE /api/agents/[agentId] — blocked for builtins */
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
+export async function DELETE(_req: NextRequest, props: Ctx) {
+  const params = await props.params;
   const { agentId } = params
   try {
     // Check if builtin before deleting

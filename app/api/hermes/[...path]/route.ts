@@ -131,24 +131,31 @@ async function forward(req: NextRequest, segments: string[]): Promise<Response> 
   })
 }
 
-export async function GET(req: NextRequest, { params }: { params: { path: string[] } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   return forward(req, params.path)
 }
-export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   return forward(req, params.path)
 }
-export async function PATCH(req: NextRequest, { params }: { params: { path: string[] } }) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   return forward(req, params.path)
 }
-export async function PUT(req: NextRequest, { params }: { params: { path: string[] } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   return forward(req, params.path)
 }
-export async function DELETE(req: NextRequest, { params }: { params: { path: string[] } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   return forward(req, params.path)
 }
-export async function HEAD(req: NextRequest, { params }: { params: { path: string[] } }) {
+export async function HEAD(req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   return forward(req, params.path)
 }
-export async function OPTIONS(req: NextRequest, { params }: { params: { path: string[] } }) {
+export async function OPTIONS(req: NextRequest, props: { params: Promise<{ path: string[] }> }) {
+  const params = await props.params;
   return forward(req, params.path)
 }

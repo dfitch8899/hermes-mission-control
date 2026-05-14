@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ddb, TABLES, QueryCommand, GetCommand, DeleteCommand } from '@/lib/dynamodb'
 
 /** GET /api/chats/[chatId] — fetch all messages for a chat */
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { chatId: string } },
-) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ chatId: string }> }) {
+  const params = await props.params;
   const { chatId } = params
   try {
     const [msgResult, chatItem] = await Promise.all([
@@ -39,10 +37,8 @@ export async function GET(
 }
 
 /** DELETE /api/chats/[chatId] — remove chat + all its messages */
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { chatId: string } },
-) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ chatId: string }> }) {
+  const params = await props.params;
   const { chatId } = params
   try {
     // Delete all message items
