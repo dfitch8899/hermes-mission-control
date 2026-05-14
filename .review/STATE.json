@@ -1,8 +1,8 @@
 {
-  "iteration": 0,
+  "iteration": 1,
   "started_at": "2026-05-14",
   "areas": [
-    { "name": "hermes-integration", "status": "pending", "attempts": 0, "priority": 1, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "hermes-integration", "status": "flagged", "attempts": 1, "priority": 1, "lastFinding": ".review/findings/hermes-integration-iter-1.md", "lastVerifiedSha": null, "summary": "3 HIGH, 5 MEDIUM, 8 LOW + 2 H-EXTRA (Hermes-side). All FLAGGED per safety rails. Live ping/calendar/update OK; SSE 401 needs browser-session verification in kanban area." },
     { "name": "kanban", "status": "pending", "attempts": 0, "priority": 2, "lastFinding": null, "lastVerifiedSha": null },
     { "name": "calendar", "status": "pending", "attempts": 0, "priority": 3, "lastFinding": null, "lastVerifiedSha": null },
     { "name": "chat", "status": "pending", "attempts": 0, "priority": 4, "lastFinding": null, "lastVerifiedSha": null },
@@ -16,5 +16,17 @@
   "global_pass_count": 0,
   "max_attempts_per_area": 5,
   "max_global_passes": 3,
-  "flagged_items": []
+  "flagged_items": [
+    "hermes-integration/H-01: directOnly swallows kanbanComment+modelSet errors",
+    "hermes-integration/H-02+M-01: cache invalidation inconsistent (proxy vs direct)",
+    "hermes-integration/H-03: hermesEndpoint TTL docstring stale (5min->30min)",
+    "hermes-integration/M-02: chatSend 401 doesn't trigger Slack fallback",
+    "hermes-integration/M-03: SSE [DONE] only breaks inner loop",
+    "hermes-integration/M-04: warmHermesEndpoint runs 19x during build",
+    "hermes-integration/M-06: /api/hermes/sync polls 30s after exec throw",
+    "hermes-integration/L-01..L-08: dead code, asserts, regex, retry-match, defense-in-depth",
+    "hermes-integration/H-EXTRA: plugin manifest 404 (Hermes-side or graceful MC handling)",
+    "hermes-integration/H-EXTRA-2: SSE 401 — verify browser session path in kanban iter",
+    "build/next@14.2.5: critical security advisory; major upgrade out of auto-fix scope"
+  ]
 }
