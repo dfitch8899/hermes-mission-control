@@ -5,7 +5,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "analyze": "cross-env ANALYZE=true next build",
     "test:kanban-sse": "node --test scripts/test-kanban-sse-shim.js"
@@ -38,9 +38,11 @@
     "uuid": "^9"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@next/bundle-analyzer": "^16.2.6",
     "concurrently": "^9.2.1",
-    "cross-env": "^10.1.0"
+    "cross-env": "^10.1.0",
+    "eslint": "^9.39.4"
   },
   "overrides": {
     "postcss": "^8.5.10"

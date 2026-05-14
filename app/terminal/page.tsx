@@ -818,7 +818,6 @@ export default function TerminalPage() {
     }
 
     addLine('error', `Unknown command: "${parts[0]}" — type "help" for available commands`)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [multiStep, addLine, addLines, runHermesCommand])
 
   return (

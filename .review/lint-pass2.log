@@ -1,0 +1,23 @@
+
+> hermes-mission-control@1.0.0 lint
+> eslint .
+
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\api\agents\[agentId]\route.ts
+  2:37  warning  'PutCommand' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\page.tsx
+  49:6  warning  React Hook useEffect has a missing dependency: 'startTime'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\terminal\page.tsx
+  821:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\components\kanban\TaskCard.tsx
+  30:9  warning  'totalChildren' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\components\kanban\TaskDrawer.tsx
+  57:6  warning  React Hook useEffect has a missing dependency: 'task.boardSlug'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+✖ 5 problems (0 errors, 5 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+

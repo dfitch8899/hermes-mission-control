@@ -33,9 +33,12 @@ function Countdown({ target }: { target: string }) {
 
 function UptimeDisplay() {
   const [uptime, setUptime] = useState('')
-  const startTime = Date.now() - 86400000 * 3 - 3600000 * 7
 
   useEffect(() => {
+    // startTime is computed inside the effect so it's stable for the
+    // effect's lifetime — defining it outside would re-create on every
+    // render, leaking intervals if it were in the deps array.
+    const startTime = Date.now() - 86400000 * 3 - 3600000 * 7
     function update() {
       const diff = Date.now() - startTime
       const d = Math.floor(diff / 86400000)

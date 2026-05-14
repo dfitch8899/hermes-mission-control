@@ -42,6 +42,15 @@ jobs:
           CI: true
         run: npm run typecheck
 
+      # Lint after typecheck — catches React hook deps, dead code, unused
+      # imports, and the `any` escape hatch. Configured to allow underscore-
+      # prefixed unused params so signature-driven code (handlers, callbacks)
+      # stays ergonomic. See eslint.config.mjs.
+      - name: Lint
+        env:
+          CI: true
+        run: npm run lint
+
       - name: Build app
         env:
           CI: true

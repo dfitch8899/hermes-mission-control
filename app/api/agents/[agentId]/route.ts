@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ddb, TABLES, QueryCommand, PutCommand, UpdateCommand, DeleteCommand } from '@/lib/dynamodb'
+import { ddb, TABLES, QueryCommand, UpdateCommand, DeleteCommand } from '@/lib/dynamodb'
 import type { Agent } from '@/types/agent'
 
 type Ctx = { params: Promise<{ agentId: string }> }

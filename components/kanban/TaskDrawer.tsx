@@ -54,7 +54,7 @@ export default function TaskDrawer({ task, onClose, onUpdate, onLaunchInChat }: 
       if (taskData.comments) setComments(taskData.comments)
       if (agentData.agents)  setAgents(agentData.agents)
     }).catch(() => {})
-  }, [task.taskId])
+  }, [task.taskId, task.boardSlug])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }

@@ -63,9 +63,10 @@ export const authOptions: NextAuthOptions = {
       return ALLOWED_DOMAINS.includes(domain)
     },
     async session({ session, token }) {
-      // Attach provider info to session so UI can show the right avatar/label
+      // Attach provider info to session so UI can show the right avatar/label.
+      // We extend Session with `provider` rather than reaching for `any`.
       if (token.provider) {
-        (session as any).provider = token.provider
+        (session as typeof session & { provider?: unknown }).provider = token.provider
       }
       return session
     },

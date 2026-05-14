@@ -1,0 +1,60 @@
+
+> hermes-mission-control@1.0.0 lint
+> eslint .
+
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\api\agents\[agentId]\route.ts
+  2:37  warning  'PutCommand' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\api\ecs\metrics\route.ts
+  5:27  warning  '_req' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\api\ecs\tasks\route.ts
+  5:27  warning  '_req' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\api\memories\route.ts
+  77:66  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:72  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\page.tsx
+  49:6  warning  React Hook useEffect has a missing dependency: 'startTime'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\app\terminal\page.tsx
+  821:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\components\kanban\TaskCard.tsx
+  30:9  warning  'totalChildren' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\components\kanban\TaskDrawer.tsx
+  57:6  warning  React Hook useEffect has a missing dependency: 'task.boardSlug'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\lib\auth.ts
+  68:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\lib\hermes-plugin-sdk.ts
+  399:8   warning  '_data' is defined but never used    @typescript-eslint/no-unused-vars
+  406:9   warning  '_code' is defined but never used    @typescript-eslint/no-unused-vars
+  406:25  warning  '_reason' is defined but never used  @typescript-eslint/no-unused-vars
+  434:17  warning  '_event' is defined but never used   @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\lib\hermesClient.direct.ts
+  124:40  warning  '_senderName' is defined but never used  @typescript-eslint/no-unused-vars
+  136:37  warning  '_senderName' is defined but never used  @typescript-eslint/no-unused-vars
+  149:37  warning  '_senderName' is defined but never used  @typescript-eslint/no-unused-vars
+  186:23  warning  '_senderName' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\lib\hermesClient.slack.ts
+  167:14  warning  '_command' is defined but never used     @typescript-eslint/no-unused-vars
+  167:24  warning  '_senderName' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\next.config.js
+   1:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  15:5   error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+C:\Users\kfitc\hermes-mission-control\.claude\worktrees\stupefied-ardinghelli-c4b9d4\scripts\test-kanban-sse-shim.js
+  8:16  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  9:18  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+✖ 24 problems (7 errors, 17 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+

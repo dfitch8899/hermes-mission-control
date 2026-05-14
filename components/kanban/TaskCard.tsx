@@ -27,7 +27,6 @@ export default function TaskCard({ task, onClick, onDragStart }: Props) {
   const agentColor  = AGENT_COLORS[task.assignee]  ?? '#3cd7ff'
   const agentIcon   = AGENT_ICONS[task.assignee]   ?? '✨'
   const priColor    = PRIORITY_COLORS[task.priority] ?? PRIORITY_COLORS.normal
-  const totalChildren   = task.childIds.length
   // We don't have completed-child count here; show dep count instead
   const depCount    = task.parentIds.length + task.childIds.length
 

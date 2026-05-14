@@ -74,8 +74,8 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error('[api/memories GET]', err)
     let memories = MOCK_MEMORIES
-    if (type) memories = memories.filter(m => m.type === type as any)
-    if (source) memories = memories.filter(m => m.source === source as any)
+    if (type) memories = memories.filter(m => m.type === (type as Memory['type']))
+    if (source) memories = memories.filter(m => m.source === (source as Memory['source']))
     if (search) memories = memories.filter(m => m.title.toLowerCase().includes(search.toLowerCase()) || m.content.toLowerCase().includes(search.toLowerCase()))
     return NextResponse.json({ memories, _mock: true })
   }
