@@ -5,6 +5,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "analyze": "cross-env ANALYZE=true next build",
     "test:kanban-sse": "node --test scripts/test-kanban-sse-shim.js"
   },
   "dependencies": {
@@ -38,6 +41,8 @@
     "uuid": "^9"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "@next/bundle-analyzer": "^16.2.6",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0"
   }
 }

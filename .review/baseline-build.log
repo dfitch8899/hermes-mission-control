@@ -1,0 +1,91 @@
+
+> hermes-mission-control@1.0.0 build
+> next build
+
+  ▲ Next.js 14.2.5
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/31) ...
+   Generating static pages (7/31) 
+   Generating static pages (15/31) 
+   Generating static pages (23/31) 
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+[hermesEndpoint] Discovered Hermes at http://16.59.57.121:9120 (task 6d285c58c147490f8ce306f75bcac0a8)
+ ✓ Generating static pages (31/31)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    4.66 kB         101 kB
+├ ○ /_not-found                          871 B            88 kB
+├ ○ /agents                              6.7 kB         93.9 kB
+├ ƒ /api/agents                          0 B                0 B
+├ ƒ /api/agents/[agentId]                0 B                0 B
+├ ƒ /api/agents/seed                     0 B                0 B
+├ ƒ /api/auth/[...nextauth]              0 B                0 B
+├ ƒ /api/calendar                        0 B                0 B
+├ ƒ /api/calendar/[id]                   0 B                0 B
+├ ƒ /api/calendar/[id]/pause             0 B                0 B
+├ ƒ /api/calendar/[id]/resume            0 B                0 B
+├ ƒ /api/calendar/[id]/run               0 B                0 B
+├ ƒ /api/calendar/sync                   0 B                0 B
+├ ƒ /api/chat                            0 B                0 B
+├ ƒ /api/chat/approve                    0 B                0 B
+├ ƒ /api/chats                           0 B                0 B
+├ ƒ /api/chats/[chatId]                  0 B                0 B
+├ ƒ /api/ecs/logs                        0 B                0 B
+├ ○ /api/ecs/metrics                     0 B                0 B
+├ ○ /api/ecs/tasks                       0 B                0 B
+├ ƒ /api/hermes/[...path]                0 B                0 B
+├ ƒ /api/hermes/model                    0 B                0 B
+├ ○ /api/hermes/ping                     0 B                0 B
+├ ƒ /api/hermes/sync                     0 B                0 B
+├ ƒ /api/hermes/update                   0 B                0 B
+├ ƒ /api/kanban                          0 B                0 B
+├ ƒ /api/kanban/[taskId]                 0 B                0 B
+├ ƒ /api/kanban/[taskId]/comments        0 B                0 B
+├ ƒ /api/kanban/boards                   0 B                0 B
+├ ƒ /api/kanban/boards/[slug]            0 B                0 B
+├ ƒ /api/kanban/events                   0 B                0 B
+├ ƒ /api/memories                        0 B                0 B
+├ ƒ /api/memories/[id]                   0 B                0 B
+├ ƒ /api/terminal/execute                0 B                0 B
+├ ○ /auth/error                          1.81 kB          89 kB
+├ ○ /auth/signin                         11.7 kB        98.9 kB
+├ ○ /calendar                            9.9 kB          105 kB
+├ ○ /chat                                9.8 kB         96.9 kB
+├ ƒ /kanban                              14.4 kB         102 kB
+├ ○ /memory                              47.9 kB         148 kB
+└ ○ /terminal                            11.5 kB        98.7 kB
++ First Load JS shared by all            87.2 kB
+  ├ chunks/23-0365f7d94a2b243b.js        31.5 kB
+  ├ chunks/fd9d1056-9ffb01a50096051a.js  53.6 kB
+  └ other shared chunks (total)          1.99 kB
+
+
+ƒ Middleware                             19.5 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

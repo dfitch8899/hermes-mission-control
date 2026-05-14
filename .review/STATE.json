@@ -1,0 +1,20 @@
+{
+  "iteration": 0,
+  "started_at": "2026-05-14",
+  "areas": [
+    { "name": "hermes-integration", "status": "pending", "attempts": 0, "priority": 1, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "kanban", "status": "pending", "attempts": 0, "priority": 2, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "calendar", "status": "pending", "attempts": 0, "priority": 3, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "chat", "status": "pending", "attempts": 0, "priority": 4, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "terminal", "status": "pending", "attempts": 0, "priority": 5, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "agents", "status": "pending", "attempts": 0, "priority": 6, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "memory", "status": "pending", "attempts": 0, "priority": 7, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "auth", "status": "pending", "attempts": 0, "priority": 8, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "dashboard", "status": "pending", "attempts": 0, "priority": 9, "lastFinding": null, "lastVerifiedSha": null },
+    { "name": "perf-cross-cutting", "status": "pending", "attempts": 0, "priority": 10, "lastFinding": null, "lastVerifiedSha": null }
+  ],
+  "global_pass_count": 0,
+  "max_attempts_per_area": 5,
+  "max_global_passes": 3,
+  "flagged_items": []
+}

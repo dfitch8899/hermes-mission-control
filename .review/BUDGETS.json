@@ -1,0 +1,25 @@
+{
+  "perf": {
+    "lcp_ms_max": 2500,
+    "ttfb_ms_max": 800,
+    "fcp_ms_max": 1800,
+    "per_page_js_kb_gzip_max": 300,
+    "max_renders_per_action": 5,
+    "hermes_api_median_ms_max": 300,
+    "sse_storm_window_min": 10,
+    "sse_storm_max_reconnects": 2
+  },
+  "quality": {
+    "ts_errors_max": 0,
+    "build_warnings_max": 0,
+    "console_errors_max_per_page": 0,
+    "unhandled_rejections_max_in_smoke": 0,
+    "smoke_duration_min": 10
+  },
+  "hermes": {
+    "ping_ms_max": 500,
+    "endpoint_discovery_cache_ttl_min": 30,
+    "auth_retry_count": 1,
+    "cache_invalidate_on_5xx": true
+  }
+}
