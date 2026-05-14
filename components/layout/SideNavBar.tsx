@@ -14,6 +14,29 @@ const navItems = [
   { path: '/terminal', icon: Terminal, label: 'Terminal' },
 ]
 
+const KANBAN_PLUGIN_URLS = [
+  '/api/hermes/dashboard-plugins/kanban/dist/index.js',
+  '/api/hermes/dashboard-plugins/kanban/dist/style.css',
+]
+
+/**
+ * Warm the browser HTTP cache for the kanban plugin bundle on hover. Next.js
+ * Link already prefetches /kanban's HTML, but the plugin script + CSS are
+ * fetched inside a useEffect — the route prefetcher never sees them. Firing a
+ * low-priority fetch here lands the bytes before the user clicks.
+ */
+function prefetchKanbanPlugin(): void {
+  if (typeof window === 'undefined') return
+  const w = window as Window & { __kanbanPluginPrefetched?: boolean }
+  if (w.__kanbanPluginPrefetched) return
+  w.__kanbanPluginPrefetched = true
+  for (const url of KANBAN_PLUGIN_URLS) {
+    // `priority: 'low'` is a valid fetch option in modern Chromium / Safari
+    // (Fetch Priority API). TS DOM lib doesn't know about it yet — cast.
+    fetch(url, { priority: 'low' } as RequestInit & { priority: 'low' }).catch(() => {})
+  }
+}
+
 export default function SideNavBar() {
   const pathname = usePathname()
 
@@ -90,6 +113,10 @@ export default function SideNavBar() {
                   e.currentTarget.style.color = '#dde2f9'
                   e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
                 }
+                if (item.path === '/kanban') prefetchKanbanPlugin()
+              }}
+              onFocus={() => {
+                if (item.path === '/kanban') prefetchKanbanPlugin()
               }}
               onMouseLeave={(e) => {
                 if (!isActive) {

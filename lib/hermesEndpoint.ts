@@ -86,6 +86,15 @@ export function invalidateHermesEndpointCache(): void {
   _writeCache(null)
 }
 
+/**
+ * Fire-and-forget warmup. Call from server components that will later make
+ * /api/hermes/* requests so the 1.5 s ECS discovery runs in parallel with
+ * HTML streaming instead of stacking in front of the first proxy hit.
+ */
+export function warmHermesEndpoint(): void {
+  getHermesDashboardUrl().catch(() => { /* discovery errors surface at request time */ })
+}
+
 async function _discover(): Promise<string> {
   const ecs = new ECSClient({ region: REGION })
   const ec2 = new EC2Client({ region: REGION })

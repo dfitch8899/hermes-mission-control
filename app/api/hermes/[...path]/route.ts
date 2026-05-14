@@ -98,6 +98,24 @@ async function forward(req: NextRequest, segments: string[]): Promise<Response> 
     respHeaders.set(key, value)
   })
 
+  // Plugin static assets (the kanban bundle + stylesheet under
+  // /dashboard-plugins/*/dist/*) are immutable per Hermes deploy and several
+  // hundred KB combined. Hermes doesn't set Cache-Control on them, so the
+  // browser refetches every kanban visit. Override here: 5 min fresh, 1 h
+  // stale-while-revalidate. Worst case after a Hermes redeploy is one stale
+  // load before SWR fetches the new bytes in the background.
+  //
+  // Gated on 2xx — never cache a 404 / 5xx response, otherwise a transient
+  // failure during rollout would stick in the browser for 5 minutes.
+  const last = segments[segments.length - 1] ?? ''
+  if (
+    upstream.ok &&
+    segments[0] === 'dashboard-plugins' &&
+    /\.(js|css|map|woff2?|png|svg)$/i.test(last)
+  ) {
+    respHeaders.set('cache-control', 'public, max-age=300, stale-while-revalidate=3600')
+  }
+
   // SSE-specific belt-and-suspenders: explicitly disable caching + buffering.
   // The upstream Hermes endpoint already sets these, but if Vercel or any
   // intermediate adds buffering by default, this overrides it.

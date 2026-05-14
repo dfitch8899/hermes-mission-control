@@ -4,12 +4,25 @@ import HermesNativeKanbanHost from '@/components/kanban/HermesNativeKanbanHost'
 
 export const dynamic = 'force-dynamic'
 
+// Endpoint discovery is warmed by the root layout (app/layout.tsx) on every
+// request, so by the time this page renders the ECS IP cache is already hot.
+
+const PLUGIN_SCRIPT = '/api/hermes/dashboard-plugins/kanban/dist/index.js'
+const PLUGIN_STYLES = '/api/hermes/dashboard-plugins/kanban/dist/style.css'
+
 export default function KanbanPage() {
   const configured = Boolean(process.env.HERMES_DASHBOARD_URL?.trim())
   if (!configured) return <NativeKanbanUnavailable />
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
+      {/* Preload the plugin bundle + stylesheet from the SSR'd HTML so the browser
+          starts fetching them in parallel with the React bundle, instead of waiting
+          for hydration + useEffect inside HermesNativeKanbanHost. Next 14 hoists
+          <link> tags out of the body automatically. */}
+      <link rel="preload" as="style" href={PLUGIN_STYLES} />
+      <link rel="preload" as="script" href={PLUGIN_SCRIPT} />
+
       {/* Subtle accent overlay — matches other MC pages (agents, calendar, memory).
           The body's own ambient gradient + grid (globals.css) reads through this. */}
       <div
