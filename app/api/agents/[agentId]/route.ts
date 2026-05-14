@@ -17,7 +17,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ agent: item as Agent })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    console.error('[api/agents/[agentId] GET]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -53,7 +54,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 
     return NextResponse.json({ success: true, updatedAt: now })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    console.error('[api/agents/[agentId] PATCH]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -78,6 +80,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    console.error('[api/agents/[agentId] DELETE]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

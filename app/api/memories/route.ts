@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get('type')
   const source = searchParams.get('source')
   const search = searchParams.get('search')
-  const limit = parseInt(searchParams.get('limit') || '100')
+  const limit = parseInt(searchParams.get('limit') || '100', 10)
 
   try {
     const filterExpressions: string[] = []

@@ -717,7 +717,7 @@ export default function TerminalPage() {
         return
       }
       if (sub === 'logs') {
-        const n = parseInt(parts[2] || '20')
+        const n = parseInt(parts[2] || '20', 10)
         setProcessing(true)
         try {
           const res  = await fetch(`/api/ecs/logs?lines=${n}`)

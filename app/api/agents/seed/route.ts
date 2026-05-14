@@ -35,17 +35,21 @@ export async function POST(req: NextRequest) {
         }))
         seeded.push(agent.agentId)
       } else if (force) {
-        // Force reseed — overwrite model/policy fields but keep user-edited systemPrompt
+        // Force reseed — refresh only the model/policy fields from builtin
+        // defaults. All user-edited surface fields (name, icon, color,
+        // systemPrompt, description) are preserved by spreading existing
+        // first. Previously this spread `...agent` AFTER existing which
+        // reverted those edits.
         await ddb.send(new PutCommand({
           TableName: TABLES.agents,
           Item: {
+            ...existing,
             pk: 'AGENT',
             sk: `AGENT#${agent.agentId}`,
-            ...agent,
-            // Preserve user edits to systemPrompt unless it's still the default
-            systemPrompt: existing.systemPrompt ?? agent.systemPrompt,
-            createdAt:    existing.createdAt ?? now,
-            updatedAt:    now,
+            orchestratorModel:  agent.orchestratorModel,
+            workerModel:        agent.workerModel,
+            orchestratorPolicy: agent.orchestratorPolicy,
+            updatedAt:          now,
           },
         }))
         updated.push(agent.agentId)
@@ -55,6 +59,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ seeded, updated, skipped: BUILTIN_AGENTS.length - seeded.length - updated.length })
   } catch (err) {
     console.error('[api/agents/seed POST]', err)
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -3,7 +3,7 @@
  *
  * Hermes runs in an ECS Fargate task with a new public IP on each restart.
  * This module auto-discovers the current task's public IP via the ECS + EC2 APIs
- * and caches it for 5 minutes.
+ * and caches it for 30 minutes (invalidated proactively on 5xx / network errors).
  *
  * No manual port-forwarding needed — the MC connects directly to mc_proxy
  * on the task's public IP (port 9120).  hermesEndpoint.ts resolves that IP

@@ -4,7 +4,7 @@ import { MOCK_ECS_LOGS } from '@/lib/mockData'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const lines = parseInt(searchParams.get('lines') || '50')
+  const lines = parseInt(searchParams.get('lines') || '50', 10)
   const logGroupName = process.env.CLOUDWATCH_LOG_GROUP || '/ecs/hermes-agent'
 
   try {

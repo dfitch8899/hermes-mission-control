@@ -24,7 +24,10 @@ function MemoryCardInner({ memory, onClick, index = 0 }: MemoryCardProps) {
     <article
       className="rounded-xl p-4 cursor-pointer flex flex-col gap-3 animate-slide-in-left"
       style={{
-        animationDelay: `${index * 60}ms`,
+        // Cap the cascade so 84 cards don't take 5s to settle (84*60ms);
+        // cards past position 12 share the same 720ms delay — visually
+        // still feels like a stagger because they're off-screen on load.
+        animationDelay: `${Math.min(index, 12) * 60}ms`,
         backgroundColor: 'rgba(47,52,70,0.3)',
         border: '1px solid rgba(255,255,255,0.08)',
         transition: 'background-color 0.15s ease, border-color 0.15s ease',
