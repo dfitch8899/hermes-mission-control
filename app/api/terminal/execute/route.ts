@@ -83,6 +83,33 @@ function usesCli(command: string): boolean {
   return CLI_COMMANDS.has(parseBase(command))
 }
 
+// Defense-in-depth for the CLI exec path. mc_proxy whitespace-splits the
+// command and does not shell-eval, so a metacharacter like `;` becomes a
+// literal argv token rather than a shell separator — but that's a property
+// of an external service. These checks make the safety property hold
+// independently of mc_proxy's parser:
+//
+//   - 2048 char cap: bounds the request size and the mc_proxy log line.
+//   - No newlines / carriage returns: prevents log injection in mc_proxy
+//     and downstream log aggregators.
+//   - No ASCII control chars (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F): no real
+//     command needs them; presence is a strong adversarial signal.
+//
+// Chat slash commands (the non-CLI path) carry arbitrary user prose so
+// they don't get this validation — that text goes to chatSend, not exec.
+const CLI_MAX_LEN = 2048
+const CLI_FORBIDDEN = /[\x00-\x08\x0B\x0C\x0E-\x1F\r\n]/
+
+function validateCliCommand(command: string): { ok: true } | { ok: false; reason: string } {
+  if (command.length > CLI_MAX_LEN) {
+    return { ok: false, reason: `command too long (${command.length} > ${CLI_MAX_LEN})` }
+  }
+  if (CLI_FORBIDDEN.test(command)) {
+    return { ok: false, reason: 'command contains control characters or newlines' }
+  }
+  return { ok: true }
+}
+
 export async function POST(req: NextRequest) {
   const { command } = await req.json() as { command?: string }
   if (!command?.trim()) {
@@ -94,6 +121,13 @@ export async function POST(req: NextRequest) {
       JSON.stringify({ error: `Command not allowed: "${parseBase(command)}". Type /help for available commands.` }),
       { status: 400 },
     )
+  }
+
+  if (usesCli(command)) {
+    const v = validateCliCommand(command)
+    if (!v.ok) {
+      return new Response(JSON.stringify({ error: v.reason }), { status: 400 })
+    }
   }
 
   const session    = await getServerSession(authOptions)
