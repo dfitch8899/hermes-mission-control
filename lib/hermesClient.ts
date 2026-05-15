@@ -107,7 +107,7 @@ function directOnlyFireAndForget<K extends 'kanbanComplete' | 'kanbanBlock'>(
   }) as HermesTransport[K]
 }
 
-function directOnlyStrict<K extends 'kanbanComment' | 'modelSet' | 'kanbanCreate' | 'kanbanSetStatus' | 'kanbanSpecify' | 'kanbanGetLog'>(
+function directOnlyStrict<K extends 'kanbanComment' | 'modelSet' | 'kanbanCreate' | 'kanbanSetStatus' | 'kanbanSpecify' | 'kanbanGetLog' | 'kanbanArchive'>(
   method: K,
 ): HermesTransport[K] {
   return (async (...args: Parameters<HermesTransport[K]>) => {
@@ -136,6 +136,10 @@ export const hermesClient: HermesTransport = {
   // kanbanGetLog is a read — but strict so an empty/error response surfaces
   // instead of looking like "no worker log on disk yet".
   kanbanGetLog:    directOnlyStrict('kanbanGetLog'),
+  // kanbanArchive: strict so a transport failure doesn't silently fall back
+  // to DDB-only — that was the source of "archived tasks pop back into the
+  // triage queue" bug. Better to surface the failure to the user.
+  kanbanArchive:   directOnlyStrict('kanbanArchive'),
   kanbanComplete:  directOnlyFireAndForget('kanbanComplete'),
   kanbanBlock:     directOnlyFireAndForget('kanbanBlock'),
   kanbanComment:   directOnlyStrict('kanbanComment'),

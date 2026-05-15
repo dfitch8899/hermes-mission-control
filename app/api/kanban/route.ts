@@ -50,7 +50,16 @@ export async function GET(req: NextRequest) {
     }))
 
     // Filters
-    if (!includeArchived) tasks = tasks.filter(t => !t.archivedAt)
+    //
+    // We treat a task as archived if EITHER condition is true:
+    //  - `archivedAt` is set (legacy DDB-only archives, plus current Hermes
+    //    archives via kanban_mirror's archive event handler), OR
+    //  - the mirrored `status` is 'archived' (Hermes' own enum value; the
+    //    KanbanStatus TS type lies about this — see comment on the type).
+    // Belt-and-braces: kanban_mirror's full-row `_put` replays once dropped
+    // an MC-DDB-only `archivedAt`; this second check stops the resurrected
+    // row from leaking into every list (Triage Queue, Recent Tasks, etc.).
+    if (!includeArchived) tasks = tasks.filter(t => !t.archivedAt && (t.status as string) !== 'archived')
     if (statusFilter)     tasks = tasks.filter(t => t.status === statusFilter)
     if (assigneeFilter)   tasks = tasks.filter(t => t.assignee === assigneeFilter)
     if (searchQuery) {

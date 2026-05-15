@@ -171,6 +171,13 @@ export const slackTransport: HermesTransport = {
     )
   },
 
+  async kanbanArchive(_taskId, _board) {
+    throw new Error(
+      'slackTransport.kanbanArchive is not supported — archiving requires the direct transport ' +
+      '(set HERMES_TRANSPORT=direct)',
+    )
+  },
+
   async kanbanComplete(taskId, result, senderName) {
     assertSlackConfigured('kanbanComplete')
     const suffix = result ? ` "${result}"` : ''

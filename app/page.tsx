@@ -76,6 +76,10 @@ export default function OverviewPage() {
   const inProgressTasks = useMemo(() => tasks.filter(t => t.status === 'running'), [tasks])
   const completedTasks  = useMemo(() => tasks.filter(t => t.status === 'done'), [tasks])
   const triageTasks     = useMemo(
+    // Defensive filter — `status === 'triage'` already excludes Hermes's
+    // 'archived' status (TS lies; it's a real runtime value), but check
+    // `archivedAt` too in case kanban_mirror.py left a row in a half-state
+    // where status is still 'triage' but the archive event already fired.
     () => tasks
       .filter(t => t.status === 'triage' && !t.archivedAt)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),

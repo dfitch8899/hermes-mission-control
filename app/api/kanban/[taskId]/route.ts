@@ -100,13 +100,17 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId:
     const now        = new Date().toISOString()
 
     // ── Archive ─────────────────────────────────────────────────────────────
+    // Route through Hermes (sets status='archived' in its SQLite tasks
+    // table). kanban_mirror.py then echoes the new state back to DDB and the
+    // archive STICKS across subsequent worker events.
+    //
+    // Previous behavior wrote only to DDB. That was silently broken: any
+    // subsequent Hermes-side event for the task (worker spawn, crash, etc.)
+    // caused kanban_mirror to full-replace the DDB row, which wiped the
+    // DDB-only `archivedAt` and brought the task back into every list —
+    // including the Overview's Triage Queue.
     if (body.archived) {
-      await ddb.send(new UpdateCommand({
-        TableName: TABLES.kanban,
-        Key: { pk: boardPk, sk: `TASK#${taskId}` },
-        UpdateExpression: 'SET archivedAt = :ts, updatedAt = :ts2',
-        ExpressionAttributeValues: { ':ts': now, ':ts2': now },
-      }))
+      await hermesClient.kanbanArchive(taskId, board)
       return NextResponse.json({ ok: true })
     }
 

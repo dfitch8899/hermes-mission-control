@@ -111,6 +111,14 @@ export interface HermesTransport {
   kanbanSpecify(taskId: string, board?: string): Promise<KanbanSpecifyResult>
 
   /**
+   * Archive a kanban task in Hermes (sets status='archived' via the plugin's
+   * archive_task path). Goes through Hermes so the archive sticks even after
+   * subsequent worker events trigger kanban_mirror.py to full-replace the
+   * DDB row — a previous DDB-only archive would have been silently wiped.
+   */
+  kanbanArchive(taskId: string, board?: string): Promise<void>
+
+  /**
    * Fetch the worker stdout/stderr log for a task's most recent run.
    * `tailBytes` caps the response size (the plugin clamps to [1, 2_000_000]).
    * Use this to diagnose protocol-violation crashes ("worker exited rc=0
