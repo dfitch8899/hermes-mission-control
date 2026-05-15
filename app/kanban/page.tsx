@@ -11,7 +11,11 @@ const PLUGIN_SCRIPT = '/api/hermes/dashboard-plugins/kanban/dist/index.js'
 const PLUGIN_STYLES = '/api/hermes/dashboard-plugins/kanban/dist/style.css'
 
 export default function KanbanPage() {
-  const configured = Boolean(process.env.HERMES_DASHBOARD_URL?.trim())
+  // The native kanban host posts to /api/hermes/* which resolves the upstream
+  // via lib/hermesEndpoint.ts. That falls back to ECS auto-discovery when
+  // HERMES_DASHBOARD_URL is unset (the Vercel-deploy case), so the only thing
+  // truly required to wire things up is the shared secret.
+  const configured = Boolean(process.env.HERMES_SECRET_KEY?.trim())
   if (!configured) return <NativeKanbanUnavailable />
 
   return (
