@@ -32,6 +32,20 @@ export interface KanbanSpecifyResult {
 }
 
 /**
+ * Response shape from GET /api/plugins/kanban/tasks/{id}/log.
+ * Returns the on-disk worker log for the task's most recent run.
+ * `exists: false` is normal — a task that never spawned a worker has no log.
+ */
+export interface KanbanTaskLog {
+  task_id:    string
+  path:       string
+  exists:     boolean
+  size_bytes: number
+  content:    string
+  truncated:  boolean
+}
+
+/**
  * Fields MC sends to the Hermes plugin's POST /api/plugins/kanban/tasks.
  * Mirrors CreateTaskBody in the Hermes plugin (hermes_cli plugin_api.py).
  * Tags are intentionally omitted: the Hermes plugin doesn't model them yet.
@@ -95,6 +109,14 @@ export interface HermesTransport {
    * rather than treating it as a transport failure.
    */
   kanbanSpecify(taskId: string, board?: string): Promise<KanbanSpecifyResult>
+
+  /**
+   * Fetch the worker stdout/stderr log for a task's most recent run.
+   * `tailBytes` caps the response size (the plugin clamps to [1, 2_000_000]).
+   * Use this to diagnose protocol-violation crashes ("worker exited rc=0
+   * without calling kanban_complete/kanban_block").
+   */
+  kanbanGetLog(taskId: string, opts?: { board?: string; tailBytes?: number }): Promise<KanbanTaskLog>
 
   /**
    * Notify Hermes a kanban task was completed (workspace cleanup side-effect).

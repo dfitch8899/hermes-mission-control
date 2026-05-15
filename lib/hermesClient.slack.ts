@@ -164,6 +164,13 @@ export const slackTransport: HermesTransport = {
     )
   },
 
+  async kanbanGetLog(_taskId, _opts) {
+    throw new Error(
+      'slackTransport.kanbanGetLog is not supported — the log endpoint requires the direct transport ' +
+      '(set HERMES_TRANSPORT=direct)',
+    )
+  },
+
   async kanbanComplete(taskId, result, senderName) {
     assertSlackConfigured('kanbanComplete')
     const suffix = result ? ` "${result}"` : ''

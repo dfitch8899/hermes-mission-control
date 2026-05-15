@@ -277,6 +277,22 @@ export default function OverviewPage() {
                       <span className="text-[10px] font-mono text-outline">
                         {formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}
                       </span>
+                      {/* Worker log shortcut — only meaningful once a worker
+                          has actually run. Tasks in triage/todo/ready won't
+                          have a log yet, so hide the link to reduce visual
+                          noise. The destination page still renders an empty
+                          state if a user navigates there directly. */}
+                      {(task.status === 'running' || task.status === 'done' || task.status === 'blocked') && (
+                        <a
+                          href={`/kanban/logs/${encodeURIComponent(task.taskId)}`}
+                          className="text-[10px] font-mono transition-colors duration-200"
+                          style={{ color: 'rgba(133,147,152,0.7)' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#3cd7ff' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(133,147,152,0.7)' }}
+                        >
+                          log &rarr;
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>

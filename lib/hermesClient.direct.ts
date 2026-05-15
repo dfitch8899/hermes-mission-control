@@ -16,6 +16,7 @@ import type {
   KanbanCreateInput,
   KanbanPlainStatus,
   KanbanSpecifyResult,
+  KanbanTaskLog,
 } from './hermesClient.types'
 import {
   getHermesDashboardUrl,
@@ -183,6 +184,24 @@ export const directTransport: HermesTransport = {
       body:    JSON.stringify({ status }),
     })
     await checkResponse(res, `kanbanSetStatus(${taskId}, ${status})`)
+  },
+
+  async kanbanGetLog(
+    taskId: string,
+    opts?: { board?: string; tailBytes?: number },
+  ): Promise<KanbanTaskLog> {
+    const base   = await dashboardUrl()
+    const params = new URLSearchParams()
+    if (opts?.board)     params.set('board', opts.board)
+    if (opts?.tailBytes) params.set('tail',  String(opts.tailBytes))
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    const res = await fetch(`${base}/api/plugins/kanban/tasks/${taskId}/log${qs}`, {
+      method:  'GET',
+      headers: { ...authHeaders() },
+      signal:  AbortSignal.timeout(15_000),
+    })
+    await checkResponse(res, `kanbanGetLog(${taskId})`)
+    return await res.json() as KanbanTaskLog
   },
 
   async kanbanSpecify(taskId: string, board?: string): Promise<KanbanSpecifyResult> {
