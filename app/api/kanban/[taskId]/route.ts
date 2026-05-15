@@ -65,11 +65,18 @@ export async function GET(req: NextRequest, props: { params: Promise<{ taskId: s
 /** PATCH /api/kanban/[taskId] — state transitions
  *  ?board=<slug>  optional (default "default")
  *
- *  All transitions update DynamoDB directly — instant and reliable.
- *  Only `done` and `blocked` also fire a best-effort Slack notification
- *  so Hermes can clean up any active workspace.  Metadata-only changes
- *  (assignee, title, priority, archive) are DDB-only to avoid Slack
- *  pollution from Hermes LLM misinterpreting the slash commands.
+ *  Status transitions route through the Hermes plugin API (Hermes is the
+ *  source of truth post-2026-05-12 refactor). kanban_mirror.py echoes
+ *  the resulting state back into DDB on its next poll cycle:
+ *    - 'done'                 → hermesClient.kanbanComplete (existing path)
+ *    - 'blocked'              → hermesClient.kanbanBlock    (existing path)
+ *    - 'triage' | 'todo' | 'ready' → hermesClient.kanbanSetStatus (new)
+ *    - 'running'              → forwarded to Hermes, which rejects with 400
+ *                               (the dispatcher/claim path owns this status)
+ *
+ *  Metadata-only changes (assignee, title, priority, archive) remain
+ *  DDB-only — see comment on each block for the rationale (Slack
+ *  pollution from the Hermes LLM misinterpreting slash commands).
  */
 export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
   const params = await props.params;
@@ -104,30 +111,24 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId:
     }
 
     // ── Status transition ───────────────────────────────────────────────────
+    // Hermes is the source of truth — every status transition goes through
+    // its plugin API, and kanban_mirror.py reflects the new state back into
+    // DDB. MC no longer writes DDB locally on a status change; doing so
+    // would create transient drift until the next mirror tick.
     if (body.status) {
       const s = body.status
-
-      // Build the update expression
-      let updateExpr = 'SET #st = :s, updatedAt = :ts'
-      const attrNames: Record<string, string>  = { '#st': 'status' }
-      const attrValues: Record<string, unknown> = { ':s': s, ':ts': now }
-
       if (s === 'done') {
-        updateExpr += ', completedAt = :ts'
-        // Best-effort Hermes side-effect (mark workspace complete, clean up active session).
-        hermesClient.kanbanComplete(taskId, body.result, senderName).catch(() => {})
+        await hermesClient.kanbanComplete(taskId, body.result, senderName)
       } else if (s === 'blocked') {
-        hermesClient.kanbanBlock(taskId, body.reason, senderName).catch(() => {})
+        await hermesClient.kanbanBlock(taskId, body.reason, senderName)
+      } else if (s === 'triage' || s === 'todo' || s === 'ready') {
+        await hermesClient.kanbanSetStatus(taskId, s, board)
+      } else {
+        // 'running' and anything else: the Hermes plugin enforces the rule
+        // that `running` is owned by the dispatcher; forward and let it
+        // surface the 400 to the caller instead of silently DDB-writing.
+        await hermesClient.kanbanSetStatus(taskId, s as 'triage' | 'todo' | 'ready', board)
       }
-      // 'running', 'triage', 'todo', 'ready' → DDB only (no Hermes CLI equivalent)
-
-      await ddb.send(new UpdateCommand({
-        TableName: TABLES.kanban,
-        Key: { pk: boardPk, sk: `TASK#${taskId}` },
-        UpdateExpression: updateExpr,
-        ExpressionAttributeNames: attrNames,
-        ExpressionAttributeValues: attrValues,
-      }))
       return NextResponse.json({ ok: true })
     }
 

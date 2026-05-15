@@ -139,6 +139,24 @@ export const slackTransport: HermesTransport = {
     return pollForReply(post.channel, post.ts, opts.onPermissionRequest, opts.onTextUpdate)
   },
 
+  async kanbanCreate(_input) {
+    // Same policy as kanbanComment / modelSet — kanban writes must never go
+    // through the Slack relay, where the Hermes LLM would misinterpret the
+    // structured payload as a chat message. Throw loudly so callers can fall
+    // back to a user-visible error rather than silently dropping the task.
+    throw new Error(
+      'slackTransport.kanbanCreate is not supported — task creation requires the direct transport ' +
+      '(set HERMES_TRANSPORT=direct)',
+    )
+  },
+
+  async kanbanSetStatus(_taskId, _status, _board) {
+    throw new Error(
+      'slackTransport.kanbanSetStatus is not supported — status transitions require the direct transport ' +
+      '(set HERMES_TRANSPORT=direct)',
+    )
+  },
+
   async kanbanComplete(taskId, result, senderName) {
     assertSlackConfigured('kanbanComplete')
     const suffix = result ? ` "${result}"` : ''
