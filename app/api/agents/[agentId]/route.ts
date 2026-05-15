@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { ddb, TABLES, QueryCommand, UpdateCommand, DeleteCommand } from '@/lib/dynamodb'
 import type { Agent } from '@/types/agent'
 import { syncAgent, syncDeleteProfile } from '@/lib/hermesProfileSync'
@@ -56,9 +56,12 @@ export async function PATCH(req: NextRequest, props: Ctx) {
     }))
 
     // Best-effort: push systemPrompt change to Hermes profile (no-op when only
-    // visual fields changed, since the soul payload uses whatever we send).
+    // visual fields changed). Use after() so this outlives the response on
+    // Vercel — a plain `void` would let the function freeze before the sync
+    // HTTP call completed.
     if (body.systemPrompt !== undefined) {
-      void syncAgent({ agentId, systemPrompt: body.systemPrompt })
+      const newPrompt = body.systemPrompt
+      after(() => syncAgent({ agentId, systemPrompt: newPrompt }))
     }
 
     return NextResponse.json({ success: true, updatedAt: now })
@@ -89,8 +92,9 @@ export async function DELETE(_req: NextRequest, props: Ctx) {
     }))
 
     // Best-effort: delete the Hermes profile too. Skipped silently if upstream
-    // is unauthenticated (see lib/hermesProfileSync.ts).
-    void syncDeleteProfile(agentId)
+    // is unauthenticated. Use after() so the function stays alive on Vercel
+    // long enough for the underlying `hermes profile delete` exec to finish.
+    after(() => syncDeleteProfile(agentId))
 
     return NextResponse.json({ success: true })
   } catch (err) {

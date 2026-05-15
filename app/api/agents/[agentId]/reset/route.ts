@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { ddb, TABLES, GetCommand, PutCommand } from '@/lib/dynamodb'
 import { BUILTIN_AGENTS } from '@/types/agent'
 import type { Agent } from '@/types/agent'
@@ -46,8 +46,9 @@ export async function POST(_req: NextRequest, props: Ctx) {
       Item: { pk: 'AGENT', sk: `AGENT#${agentId}`, ...agent },
     }))
 
-    // Best-effort: push canonical prompt back to Hermes profile too.
-    void syncAgent({ agentId, systemPrompt: agent.systemPrompt })
+    // Best-effort: push canonical prompt back to Hermes profile too. Use
+    // after() so the sync survives the response on Vercel.
+    after(() => syncAgent({ agentId, systemPrompt: agent.systemPrompt }))
 
     return NextResponse.json({ agent })
   } catch (err) {

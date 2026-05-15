@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { ddb, TABLES, QueryCommand, PutCommand } from '@/lib/dynamodb'
 import type { Agent } from '@/types/agent'
 import { syncAgent } from '@/lib/hermesProfileSync'
@@ -67,8 +67,11 @@ export async function POST(req: NextRequest) {
     }))
 
     // Best-effort: push to Hermes profile so MC fields drive actual behavior.
-    // Returns gracefully on auth_blocked (see lib/hermesProfileSync.ts).
-    void syncAgent({ agentId, systemPrompt: agent.systemPrompt })
+    // Use after() so the work outlives the response and actually completes on
+    // Vercel — a plain `void` would let Vercel freeze the function after the
+    // response is sent and the sync HTTP call would get cut off.
+    // syncAgent logs but never throws (see lib/hermesProfileSync.ts).
+    after(() => syncAgent({ agentId, systemPrompt: agent.systemPrompt }))
 
     return NextResponse.json({ agent }, { status: 201 })
   } catch (err) {
