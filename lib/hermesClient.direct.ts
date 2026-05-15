@@ -175,6 +175,22 @@ export const directTransport: HermesTransport = {
     return id
   },
 
+  async kanbanArchive(taskId: string, board?: string) {
+    const base = await dashboardUrl()
+    const qs = board ? `?board=${encodeURIComponent(board)}` : ''
+    // The plugin's UpdateTaskBody accepts status='archived' and routes
+    // through kanban_db.archive_task, which sets the SQLite tasks.status
+    // to 'archived' (and timestamps archived_at). kanban_mirror then
+    // echoes both fields back to DDB, so the archive is durable across
+    // subsequent put_item replays of the row.
+    const res = await fetch(`${base}/api/plugins/kanban/tasks/${taskId}${qs}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify({ status: 'archived' }),
+    })
+    await checkResponse(res, `kanbanArchive(${taskId})`)
+  },
+
   async kanbanSetStatus(taskId: string, status: KanbanPlainStatus, board?: string) {
     const base = await dashboardUrl()
     const qs = board ? `?board=${encodeURIComponent(board)}` : ''
