@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, RefreshCw, AlertTriangle, FileText } from 'lucide-react'
+import { ArrowLeft, RefreshCw, AlertTriangle, FileText, RotateCw } from 'lucide-react'
 import TopAppBar from '@/components/layout/TopAppBar'
 import type { KanbanTaskLog } from '@/lib/hermesClient.types'
 
@@ -24,6 +24,11 @@ export default function WorkerLogPage({ params }: { params: Promise<{ taskId: st
   const [error,  setError]  = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [tailKb, setTailKb] = useState<number>(64)
+  // Retry state. `retrying` disables the button; `retryResult` is rendered
+  // inline below the header so the user gets a same-page acknowledgement
+  // (rather than a popup or navigation) before clicking Refresh.
+  const [retrying,    setRetrying]    = useState(false)
+  const [retryResult, setRetryResult] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,6 +52,30 @@ export default function WorkerLogPage({ params }: { params: Promise<{ taskId: st
   }, [taskId, tailKb])
 
   useEffect(() => { void load() }, [load])
+
+  const retry = useCallback(async () => {
+    if (retrying) return
+    setRetrying(true)
+    setRetryResult(null)
+    try {
+      const res  = await fetch(`/api/kanban/${taskId}/retry`, { method: 'POST' })
+      const data = await res.json() as { ok?: boolean; assignee?: string | null; error?: string }
+      if (!res.ok) {
+        setRetryResult({ tone: 'err', text: data.error ?? `HTTP ${res.status}` })
+        return
+      }
+      setRetryResult({
+        tone: 'ok',
+        text: data.assignee
+          ? `Reclaimed and reassigned to ${data.assignee}. Dispatcher will pick it up on its next pass.`
+          : 'Reclaimed and reassigned. Dispatcher will pick it up on its next pass.',
+      })
+    } catch (err) {
+      setRetryResult({ tone: 'err', text: String(err) })
+    } finally {
+      setRetrying(false)
+    }
+  }, [retrying, taskId])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -107,8 +136,52 @@ export default function WorkerLogPage({ params }: { params: Promise<{ taskId: st
               <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
               Refresh
             </button>
+            {/* Retry — calls /api/kanban/{id}/retry which reclaims any active
+                worker claim and reassigns to the current profile. This is
+                the canonical "un-stick a parked task" verb after the
+                dispatcher has given up (consecutive_crashes >= 2). */}
+            <button
+              onClick={() => void retry()}
+              disabled={retrying}
+              title="Reclaim worker claim and re-dispatch (Hermes reassign with reclaim_first)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono font-medium transition-all"
+              style={{
+                background: 'rgba(167,139,250,0.1)',
+                border: '1px solid rgba(167,139,250,0.3)',
+                color: '#a78bfa',
+                cursor: retrying ? 'wait' : 'pointer',
+                opacity: retrying ? 0.6 : 1,
+              }}
+            >
+              <RotateCw size={11} className={retrying ? 'animate-spin' : ''} />
+              {retrying ? 'Retrying…' : 'Retry'}
+            </button>
           </div>
         </div>
+
+        {/* Retry outcome banner — rendered inline so the user gets immediate
+            confirmation. Clears on next retry click; doesn't auto-dismiss
+            because the operator may want to read the dispatcher reasoning. */}
+        {retryResult && (
+          <div
+            className="rounded-xl px-4 py-2.5 flex items-start gap-3"
+            style={{
+              background: retryResult.tone === 'ok'
+                ? 'rgba(167,139,250,0.08)'
+                : 'rgba(249,115,22,0.08)',
+              border: retryResult.tone === 'ok'
+                ? '1px solid rgba(167,139,250,0.25)'
+                : '1px solid rgba(249,115,22,0.25)',
+            }}
+          >
+            <span
+              className="text-[11px] font-mono leading-snug"
+              style={{ color: retryResult.tone === 'ok' ? '#a78bfa' : '#f97316' }}
+            >
+              {retryResult.text}
+            </span>
+          </div>
+        )}
 
         {/* Status row */}
         {log && !error && (

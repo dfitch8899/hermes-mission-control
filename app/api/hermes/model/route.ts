@@ -13,12 +13,12 @@ export async function GET() {
       TableName: TABLES.agents,
       Key: { pk: SETTINGS_PK, sk: SETTINGS_SK },
     }))
-    const activeModel = (res.Item?.activeModel as string) || 'gpt-5.4'
+    const activeModel = (res.Item?.activeModel as string) || 'gpt-5.5'
     return NextResponse.json({ model: activeModel, options: CODEX_MODELS })
   } catch (err) {
     console.error('[api/hermes/model GET]', err)
     // Return a safe default so the picker still renders
-    return NextResponse.json({ model: 'gpt-5.4', options: CODEX_MODELS })
+    return NextResponse.json({ model: 'gpt-5.5', options: CODEX_MODELS })
   }
 }
 

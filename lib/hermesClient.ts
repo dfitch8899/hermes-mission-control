@@ -107,7 +107,7 @@ function directOnlyFireAndForget<K extends 'kanbanComplete' | 'kanbanBlock'>(
   }) as HermesTransport[K]
 }
 
-function directOnlyStrict<K extends 'kanbanComment' | 'modelSet' | 'kanbanCreate' | 'kanbanSetStatus' | 'kanbanSpecify' | 'kanbanGetLog' | 'kanbanArchive'>(
+function directOnlyStrict<K extends 'kanbanComment' | 'modelSet' | 'kanbanCreate' | 'kanbanSetStatus' | 'kanbanSpecify' | 'kanbanGetLog' | 'kanbanArchive' | 'kanbanReassign'>(
   method: K,
 ): HermesTransport[K] {
   return (async (...args: Parameters<HermesTransport[K]>) => {
@@ -140,6 +140,10 @@ export const hermesClient: HermesTransport = {
   // to DDB-only — that was the source of "archived tasks pop back into the
   // triage queue" bug. Better to surface the failure to the user.
   kanbanArchive:   directOnlyStrict('kanbanArchive'),
+  // kanbanReassign powers the log-viewer "Retry" button. Strict so a 409
+  // (e.g. task still running, no reclaim_first) surfaces with the actual
+  // detail message rather than looking like a silent no-op.
+  kanbanReassign:  directOnlyStrict('kanbanReassign'),
   kanbanComplete:  directOnlyFireAndForget('kanbanComplete'),
   kanbanBlock:     directOnlyFireAndForget('kanbanBlock'),
   kanbanComment:   directOnlyStrict('kanbanComment'),
