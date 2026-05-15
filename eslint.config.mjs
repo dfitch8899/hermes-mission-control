@@ -20,6 +20,11 @@ const eslintConfig = [
       'build/**',
       'next-env.d.ts',
       '.review/**',
+      // Parallel-agent workspaces — each is a full repo checkout from a
+      // sibling branch. Local `npm run lint` was reporting ~50k issues from
+      // stale code in these dirs; CI runs from a clean checkout that doesn't
+      // have them at all, so the noise was purely a local-dev annoyance.
+      '.claude/worktrees/**',
     ],
   },
   {

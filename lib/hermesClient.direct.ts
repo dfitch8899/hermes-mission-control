@@ -15,14 +15,24 @@ import {
   getHermesDashboardUrl,
   invalidateHermesEndpointCache,
   shouldInvalidateEndpoint,
+  warmHermesEndpoint,
 } from './hermesEndpoint'
 
-// Static key for request auth (same key the proxy checks on every connection).
-const HERMES_KEY = process.env.HERMES_SECRET_KEY
-
+// Per-request env read — was previously a module-level const. The cache hit
+// on a cold Vercel Lambda was racing with HERMES_SECRET_KEY being injected
+// into process.env, so a few early requests fired with an empty key and got
+// 401 back from mc_proxy. Reading at request time eliminates that window.
 function authHeaders(): HeadersInit {
-  return HERMES_KEY ? { 'X-Hermes-Key': HERMES_KEY } : {}
+  const key = process.env.HERMES_SECRET_KEY
+  return key ? { 'X-Hermes-Key': key } : {}
 }
+
+// Fire-and-forget warmup at module load — any import of this client kicks
+// the ECS endpoint discovery so the first /api/hermes/* request after a
+// cold start doesn't pay the 1.5 s round-trip in its critical path. The
+// page-level layout already warms on render, but pure-API requests (cron
+// sync, webhook handlers, etc.) bypass that path and rely on this.
+warmHermesEndpoint()
 
 /** Resolves the base URL. Throws on discovery failure so callers can handle it. */
 async function dashboardUrl(): Promise<string> {
