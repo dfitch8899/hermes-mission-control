@@ -107,7 +107,7 @@ function directOnlyFireAndForget<K extends 'kanbanComplete' | 'kanbanBlock'>(
   }) as HermesTransport[K]
 }
 
-function directOnlyStrict<K extends 'kanbanComment' | 'modelSet' | 'kanbanCreate' | 'kanbanSetStatus'>(
+function directOnlyStrict<K extends 'kanbanComment' | 'modelSet' | 'kanbanCreate' | 'kanbanSetStatus' | 'kanbanSpecify'>(
   method: K,
 ): HermesTransport[K] {
   return (async (...args: Parameters<HermesTransport[K]>) => {
@@ -129,6 +129,10 @@ export const hermesClient: HermesTransport = {
   // silently drop the task instead of surfacing as an API error.
   kanbanCreate:    directOnlyStrict('kanbanCreate'),
   kanbanSetStatus: directOnlyStrict('kanbanSetStatus'),
+  // kanbanSpecify returns a structured outcome (including ok:false reasons)
+  // that the caller surfaces to the UI. Strict so a transport-level failure
+  // doesn't silently look like a "no auxiliary configured" result.
+  kanbanSpecify:   directOnlyStrict('kanbanSpecify'),
   kanbanComplete:  directOnlyFireAndForget('kanbanComplete'),
   kanbanBlock:     directOnlyFireAndForget('kanbanBlock'),
   kanbanComment:   directOnlyStrict('kanbanComment'),

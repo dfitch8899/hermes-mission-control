@@ -20,6 +20,18 @@ export interface PermissionRequest {
 export type KanbanPlainStatus = 'triage' | 'todo' | 'ready'
 
 /**
+ * Outcome shape returned by POST /api/plugins/kanban/tasks/{id}/specify.
+ * Mirrors the Hermes plugin response verbatim. `ok: false` is a normal
+ * response (e.g. auxiliary client not configured) — not an HTTP error.
+ */
+export interface KanbanSpecifyResult {
+  ok:        boolean
+  task_id:   string
+  reason?:   string | null
+  new_title?: string | null
+}
+
+/**
  * Fields MC sends to the Hermes plugin's POST /api/plugins/kanban/tasks.
  * Mirrors CreateTaskBody in the Hermes plugin (hermes_cli plugin_api.py).
  * Tags are intentionally omitted: the Hermes plugin doesn't model them yet.
@@ -74,6 +86,15 @@ export interface HermesTransport {
    * `done`/`blocked` have their own dedicated methods below.
    */
   kanbanSetStatus(taskId: string, status: KanbanPlainStatus, board?: string): Promise<void>
+
+  /**
+   * Run the Hermes auxiliary LLM ("triage specifier") on a triage task to
+   * flesh out title + body and promote it to `todo`. Returns the plugin's
+   * outcome shape verbatim: a non-OK outcome is NOT an error — the caller
+   * renders the reason inline (e.g. "no auxiliary client configured")
+   * rather than treating it as a transport failure.
+   */
+  kanbanSpecify(taskId: string, board?: string): Promise<KanbanSpecifyResult>
 
   /**
    * Notify Hermes a kanban task was completed (workspace cleanup side-effect).

@@ -157,6 +157,13 @@ export const slackTransport: HermesTransport = {
     )
   },
 
+  async kanbanSpecify(_taskId, _board) {
+    throw new Error(
+      'slackTransport.kanbanSpecify is not supported — the specifier endpoint requires the direct transport ' +
+      '(set HERMES_TRANSPORT=direct)',
+    )
+  },
+
   async kanbanComplete(taskId, result, senderName) {
     assertSlackConfigured('kanbanComplete')
     const suffix = result ? ` "${result}"` : ''

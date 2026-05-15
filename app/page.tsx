@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { Sparkles } from 'lucide-react'
 import TopAppBar from '@/components/layout/TopAppBar'
 import MetricCard from '@/components/overview/MetricCard'
 import ActivityFeed from '@/components/overview/ActivityFeed'
@@ -74,10 +75,48 @@ export default function OverviewPage() {
 
   const inProgressTasks = useMemo(() => tasks.filter(t => t.status === 'running'), [tasks])
   const completedTasks  = useMemo(() => tasks.filter(t => t.status === 'done'), [tasks])
+  const triageTasks     = useMemo(
+    () => tasks
+      .filter(t => t.status === 'triage' && !t.archivedAt)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [tasks],
+  )
   const recentTasks = useMemo(() => [...tasks].sort((a, b) => {
     const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     return diff !== 0 ? diff : a.taskId.localeCompare(b.taskId)
   }).slice(0, 5), [tasks])
+
+  // Per-card UI state for the Specify action. Keyed by taskId so multiple
+  // cards can be specifying or showing distinct outcomes simultaneously.
+  const [specifyingIds, setSpecifyingIds] = useState<Record<string, boolean>>({})
+  const [specifyResult, setSpecifyResult] = useState<Record<string, { tone: 'ok' | 'err'; text: string }>>({})
+
+  const runSpecify = async (task: KanbanTask) => {
+    if (specifyingIds[task.taskId]) return
+    setSpecifyingIds(s => ({ ...s, [task.taskId]: true }))
+    setSpecifyResult(r => { const { [task.taskId]: _drop, ...rest } = r; return rest })
+    try {
+      const boardParam = task.boardSlug ? `?board=${encodeURIComponent(task.boardSlug)}` : ''
+      const res  = await fetch(`/api/kanban/${task.taskId}/specify${boardParam}`, { method: 'POST' })
+      const data = await res.json() as { ok?: boolean; reason?: string | null; new_title?: string | null; error?: string }
+      if (!res.ok) {
+        setSpecifyResult(r => ({ ...r, [task.taskId]: { tone: 'err', text: data.error ?? `HTTP ${res.status}` } }))
+        return
+      }
+      if (data.ok) {
+        // Hermes promoted the card to `todo` and rewrote title/body.
+        // Refetch the board so the card drops out of the triage list.
+        const fresh = await fetch('/api/kanban').then(r => r.ok ? r.json() : null).catch(() => null)
+        if (fresh?.tasks) setTasks(fresh.tasks)
+      } else {
+        setSpecifyResult(r => ({ ...r, [task.taskId]: { tone: 'err', text: data.reason ?? 'Specifier declined.' } }))
+      }
+    } catch (err) {
+      setSpecifyResult(r => ({ ...r, [task.taskId]: { tone: 'err', text: String(err) } }))
+    } finally {
+      setSpecifyingIds(s => ({ ...s, [task.taskId]: false }))
+    }
+  }
   const recentMemories = useMemo(() => [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3), [memories])
   const upcomingEvents = useMemo(() => [...events].sort((a, b) => new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime()).slice(0, 3), [events])
   const nextEvent = upcomingEvents[0]
@@ -332,6 +371,85 @@ export default function OverviewPage() {
             </div>
           </div>
         </div>
+
+        {/* Triage Queue — only rendered when there's at least one card waiting.
+            Each row exposes "Specify", which calls /api/kanban/{id}/specify
+            (Hermes' auxiliary LLM enriches the title/body and promotes the
+            card to `todo`). A non-OK outcome from Hermes (e.g. auxiliary
+            client not configured) is surfaced inline so the operator knows
+            what to fix rather than seeing a generic failure. */}
+        {triageTasks.length > 0 && (
+          <div className="rounded-2xl p-5 glass-card animate-fade-in-up stagger-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles size={12} style={{ color: '#c084fc' }} />
+                <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-outline">
+                  Triage Queue ({triageTasks.length})
+                </span>
+              </div>
+              <a
+                href="/kanban"
+                className="text-[10px] font-mono uppercase tracking-widest transition-colors duration-200"
+                style={{ color: '#859398' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#c084fc' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#859398' }}
+              >
+                Open board &rarr;
+              </a>
+            </div>
+            <div className="space-y-2">
+              {triageTasks.map(task => {
+                const busy   = !!specifyingIds[task.taskId]
+                const result = specifyResult[task.taskId]
+                return (
+                  <div
+                    key={task.taskId}
+                    className="flex items-start gap-3 px-3 py-2.5 rounded-xl"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-medium truncate text-on-surface">{task.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge variant={priorityBadge[task.priority as keyof typeof priorityBadge] ?? 'muted'}>
+                          {task.priority}
+                        </Badge>
+                        <span className="text-[10px] font-mono text-outline">
+                          {formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}
+                        </span>
+                        {result && (
+                          <span
+                            className="text-[10px] font-mono truncate"
+                            style={{ color: result.tone === 'ok' ? '#5df6e0' : '#f97316' }}
+                            title={result.text}
+                          >
+                            {result.text}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => void runSpecify(task)}
+                      disabled={busy}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono font-medium transition-all"
+                      style={{
+                        background: busy
+                          ? 'rgba(192,132,252,0.08)'
+                          : 'linear-gradient(135deg, rgba(192,132,252,0.15), rgba(167,139,250,0.15))',
+                        border: '1px solid rgba(192,132,252,0.3)',
+                        color:  '#c084fc',
+                        cursor: busy ? 'wait' : 'pointer',
+                        opacity: busy ? 0.7 : 1,
+                      }}
+                    >
+                      <Sparkles size={11} />
+                      {busy ? 'Specifying…' : 'Specify'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Activity Feed */}
         <div className="h-64 animate-fade-in-up stagger-8">
