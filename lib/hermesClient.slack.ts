@@ -178,6 +178,13 @@ export const slackTransport: HermesTransport = {
     )
   },
 
+  async kanbanReassign(_taskId, _opts) {
+    throw new Error(
+      'slackTransport.kanbanReassign is not supported — reassignment requires the direct transport ' +
+      '(set HERMES_TRANSPORT=direct)',
+    )
+  },
+
   async kanbanComplete(taskId, result, senderName) {
     assertSlackConfigured('kanbanComplete')
     const suffix = result ? ` "${result}"` : ''

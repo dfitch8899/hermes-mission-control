@@ -15,6 +15,7 @@ import type {
   ChatSendOptions,
   KanbanCreateInput,
   KanbanPlainStatus,
+  KanbanReassignResult,
   KanbanSpecifyResult,
   KanbanTaskLog,
 } from './hermesClient.types'
@@ -173,6 +174,30 @@ export const directTransport: HermesTransport = {
     const id = data.task?.id
     if (!id) throw new Error('kanbanCreate: response missing task.id')
     return id
+  },
+
+  async kanbanReassign(
+    taskId: string,
+    opts:   { profile?: string | null; reclaimFirst?: boolean; reason?: string; board?: string },
+  ): Promise<KanbanReassignResult> {
+    const base = await dashboardUrl()
+    const qs   = opts.board ? `?board=${encodeURIComponent(opts.board)}` : ''
+    // Body shape matches Hermes plugin's ReassignBody:
+    //   { profile: Optional[str], reclaim_first: bool, reason: Optional[str] }
+    // The plugin treats null/empty profile as "unassign"; pass the current
+    // assignee when you want a same-profile retry.
+    const body: Record<string, unknown> = {
+      profile:       opts.profile ?? null,
+      reclaim_first: !!opts.reclaimFirst,
+    }
+    if (opts.reason) body.reason = opts.reason
+    const res = await fetch(`${base}/api/plugins/kanban/tasks/${taskId}/reassign${qs}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify(body),
+    })
+    await checkResponse(res, `kanbanReassign(${taskId})`)
+    return await res.json() as KanbanReassignResult
   },
 
   async kanbanArchive(taskId: string, board?: string) {

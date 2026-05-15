@@ -32,6 +32,19 @@ export interface KanbanSpecifyResult {
 }
 
 /**
+ * Result of POST /api/plugins/kanban/tasks/{id}/reassign. Hermes returns
+ * `{ok, task_id, assignee}` on success and HTTP 409 with a `detail` field
+ * when the transition is refused (e.g. unknown task, or task still running
+ * without reclaim_first=true). The direct transport translates the 409 into
+ * an exception, so the success shape is what callers see.
+ */
+export interface KanbanReassignResult {
+  ok:        boolean
+  task_id:   string
+  assignee:  string | null
+}
+
+/**
  * Response shape from GET /api/plugins/kanban/tasks/{id}/log.
  * Returns the on-disk worker log for the task's most recent run.
  * `exists: false` is normal — a task that never spawned a worker has no log.
@@ -117,6 +130,19 @@ export interface HermesTransport {
    * DDB row — a previous DDB-only archive would have been silently wiped.
    */
   kanbanArchive(taskId: string, board?: string): Promise<void>
+
+  /**
+   * Reassign a task to a (possibly different) profile, optionally reclaiming
+   * any active worker claim first. This is the canonical "un-stick" verb
+   * exposed by the Hermes plugin's recovery popover — passing the SAME
+   * profile with reclaimFirst=true is the standard way to retry a task
+   * that has hit `consecutive_crashes >= 2` and been parked by the
+   * dispatcher.
+   */
+  kanbanReassign(
+    taskId: string,
+    opts:   { profile?: string | null; reclaimFirst?: boolean; reason?: string; board?: string },
+  ): Promise<KanbanReassignResult>
 
   /**
    * Fetch the worker stdout/stderr log for a task's most recent run.

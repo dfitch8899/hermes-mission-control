@@ -8,7 +8,10 @@ import { useEffect, useRef, useState } from 'react'
 interface ModelOption { value: string; label: string; description: string }
 
 function ModelPicker() {
-  const [model,   setModel]   = useState<string>('gpt-5.4')
+  // Initial display before the API call returns. Kept in sync with the GET
+  // /api/hermes/model fallback so a cold first paint shows the same value
+  // we'd hand back if DDB hasn't been written yet.
+  const [model,   setModel]   = useState<string>('gpt-5.5')
   const [options, setOptions] = useState<ModelOption[]>([])
   const [open,    setOpen]    = useState(false)
   const [saving,  setSaving]  = useState(false)
