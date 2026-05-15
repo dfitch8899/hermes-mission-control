@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, RefreshCw, AlertTriangle, FileText, RotateCw } from 'lucide-react'
+import { ArrowLeft, RefreshCw, AlertTriangle, FileText, RotateCw, KeyRound } from 'lucide-react'
 import TopAppBar from '@/components/layout/TopAppBar'
 import type { KanbanTaskLog } from '@/lib/hermesClient.types'
 
@@ -180,6 +180,37 @@ export default function WorkerLogPage({ params }: { params: Promise<{ taskId: st
             >
               {retryResult.text}
             </span>
+          </div>
+        )}
+
+        {/* Auth-missing banner — surfaced when the worker log contains the
+            specific "No Codex credentials" string. Renders a link straight to
+            /auth so the user doesn't have to copy-paste the next step. */}
+        {log?.content && /No Codex credentials|Run `hermes auth`/i.test(log.content) && (
+          <div
+            className="rounded-xl px-4 py-3 flex items-start gap-3"
+            style={{ background: 'rgba(192,132,252,0.08)', border: '1px solid rgba(192,132,252,0.25)' }}
+          >
+            <KeyRound size={14} className="mt-0.5 shrink-0" style={{ color: '#c084fc' }} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-mono font-medium" style={{ color: '#c084fc' }}>
+                Worker exited without Codex credentials
+              </div>
+              <div className="text-[11px] font-mono mt-1" style={{ color: 'rgba(192,132,252,0.85)' }}>
+                Authenticate Hermes on the container, then click Retry above.
+              </div>
+            </div>
+            <Link
+              href="/auth"
+              className="shrink-0 text-[11px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all"
+              style={{
+                background: 'rgba(192,132,252,0.15)',
+                border: '1px solid rgba(192,132,252,0.35)',
+                color: '#c084fc',
+              }}
+            >
+              Open auth
+            </Link>
           </div>
         )}
 
