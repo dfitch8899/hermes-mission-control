@@ -15,6 +15,7 @@ import type {
   ChatSendOptions,
   KanbanCreateInput,
   KanbanPlainStatus,
+  KanbanSpecifyResult,
 } from './hermesClient.types'
 import {
   getHermesDashboardUrl,
@@ -182,6 +183,26 @@ export const directTransport: HermesTransport = {
       body:    JSON.stringify({ status }),
     })
     await checkResponse(res, `kanbanSetStatus(${taskId}, ${status})`)
+  },
+
+  async kanbanSpecify(taskId: string, board?: string): Promise<KanbanSpecifyResult> {
+    const base = await dashboardUrl()
+    const qs = board ? `?board=${encodeURIComponent(board)}` : ''
+    // The specifier runs the auxiliary LLM synchronously — Hermes' own docs
+    // say "tens of seconds to minutes on reasoning models". Use a generous
+    // timeout but not unbounded; if it really takes longer than 3 min the
+    // user should retry rather than holding the connection open.
+    const res = await fetch(`${base}/api/plugins/kanban/tasks/${taskId}/specify${qs}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify({}),
+      signal:  AbortSignal.timeout(180_000),
+    })
+    await checkResponse(res, `kanbanSpecify(${taskId})`)
+    // ok:false is a normal outcome (e.g. auxiliary not configured); the
+    // caller surfaces `reason` to the user. Do NOT translate it into an
+    // exception — that would lose the structured guidance.
+    return await res.json() as KanbanSpecifyResult
   },
 
   async kanbanComplete(taskId, result, _senderName) {
