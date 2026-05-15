@@ -107,7 +107,7 @@ function directOnlyFireAndForget<K extends 'kanbanComplete' | 'kanbanBlock'>(
   }) as HermesTransport[K]
 }
 
-function directOnlyStrict<K extends 'kanbanComment' | 'modelSet'>(
+function directOnlyStrict<K extends 'kanbanComment' | 'modelSet' | 'kanbanCreate' | 'kanbanSetStatus'>(
   method: K,
 ): HermesTransport[K] {
   return (async (...args: Parameters<HermesTransport[K]>) => {
@@ -122,10 +122,15 @@ function directOnlyStrict<K extends 'kanbanComment' | 'modelSet'>(
 }
 
 export const hermesClient: HermesTransport = {
-  chatSend:       chatWithFallback(),
-  exec:           execDirect(),
-  kanbanComplete: directOnlyFireAndForget('kanbanComplete'),
-  kanbanBlock:    directOnlyFireAndForget('kanbanBlock'),
-  kanbanComment:  directOnlyStrict('kanbanComment'),
-  modelSet:       directOnlyStrict('modelSet'),
+  chatSend:        chatWithFallback(),
+  exec:            execDirect(),
+  // kanbanCreate + kanbanSetStatus are strict (re-throw): MC no longer keeps
+  // a local DDB write fallback for these paths, so a swallowed failure would
+  // silently drop the task instead of surfacing as an API error.
+  kanbanCreate:    directOnlyStrict('kanbanCreate'),
+  kanbanSetStatus: directOnlyStrict('kanbanSetStatus'),
+  kanbanComplete:  directOnlyFireAndForget('kanbanComplete'),
+  kanbanBlock:     directOnlyFireAndForget('kanbanBlock'),
+  kanbanComment:   directOnlyStrict('kanbanComment'),
+  modelSet:        directOnlyStrict('modelSet'),
 }

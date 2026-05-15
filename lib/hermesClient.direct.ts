@@ -10,7 +10,12 @@
  * the Slack transport automatically.
  */
 
-import type { HermesTransport, ChatSendOptions } from './hermesClient.types'
+import type {
+  HermesTransport,
+  ChatSendOptions,
+  KanbanCreateInput,
+  KanbanPlainStatus,
+} from './hermesClient.types'
 import {
   getHermesDashboardUrl,
   invalidateHermesEndpointCache,
@@ -129,6 +134,54 @@ export const directTransport: HermesTransport = {
     }
 
     return accumulated || null
+  },
+
+  async kanbanCreate(input: KanbanCreateInput): Promise<string> {
+    const base = await dashboardUrl()
+    // Hermes plugin uses `?board=` as a query param, not a body field.
+    const qs = input.board ? `?board=${encodeURIComponent(input.board)}` : ''
+    // Map MC's string priority to the plugin's int priority. The plugin's
+    // CreateTaskBody declares `priority: int = 0`; conventional mapping
+    // surfaces user intent without inventing a separate scale on each side.
+    const priorityInt =
+      input.priority === 'critical' ? 2 :
+      input.priority === 'high'     ? 1 :
+      input.priority === 'low'      ? -1 :
+                                       0
+    const body: Record<string, unknown> = {
+      title:          input.title,
+      body:           input.description ?? '',
+      priority:       priorityInt,
+      workspace_kind: input.workspaceType ?? 'scratch',
+      // Land the task in the triage column by default — every MC-side
+      // create path (NewTaskModal, terminal) historically defaulted there.
+      triage:         input.triage ?? true,
+    }
+    if (input.assignee) body.assignee = input.assignee
+    if (input.tenant)   body.tenant   = input.tenant
+
+    const res = await fetch(`${base}/api/plugins/kanban/tasks${qs}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify(body),
+    })
+    await checkResponse(res, 'kanbanCreate')
+
+    const data = await res.json() as { task?: { id?: string } }
+    const id = data.task?.id
+    if (!id) throw new Error('kanbanCreate: response missing task.id')
+    return id
+  },
+
+  async kanbanSetStatus(taskId: string, status: KanbanPlainStatus, board?: string) {
+    const base = await dashboardUrl()
+    const qs = board ? `?board=${encodeURIComponent(board)}` : ''
+    const res = await fetch(`${base}/api/plugins/kanban/tasks/${taskId}${qs}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify({ status }),
+    })
+    await checkResponse(res, `kanbanSetStatus(${taskId}, ${status})`)
   },
 
   async kanbanComplete(taskId, result, _senderName) {
