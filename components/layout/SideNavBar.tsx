@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Brain, Calendar, Terminal, MessageSquare, Bot, Kanban } from 'lucide-react'
+import { Home, Brain, Calendar, Terminal, MessageSquare, Bot, Kanban, Info } from 'lucide-react'
 
 const navItems = [
   { path: '/', icon: Home, label: 'Overview' },
@@ -12,6 +12,7 @@ const navItems = [
   { path: '/memory', icon: Brain, label: 'Memory' },
   { path: '/calendar', icon: Calendar, label: 'Calendar' },
   { path: '/terminal', icon: Terminal, label: 'Terminal' },
+  { path: '/about', icon: Info, label: 'About' },
 ]
 
 const KANBAN_PLUGIN_URLS = [
