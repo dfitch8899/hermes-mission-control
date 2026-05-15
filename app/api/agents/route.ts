@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ddb, TABLES, QueryCommand, PutCommand } from '@/lib/dynamodb'
 import type { Agent } from '@/types/agent'
+import { syncAgent } from '@/lib/hermesProfileSync'
 
 /** GET /api/agents — list all agents, builtins first then alpha */
 export async function GET() {
@@ -64,6 +65,10 @@ export async function POST(req: NextRequest) {
       TableName: TABLES.agents,
       Item: { pk: 'AGENT', sk: `AGENT#${agentId}`, ...agent },
     }))
+
+    // Best-effort: push to Hermes profile so MC fields drive actual behavior.
+    // Returns gracefully on auth_blocked (see lib/hermesProfileSync.ts).
+    void syncAgent({ agentId, systemPrompt: agent.systemPrompt })
 
     return NextResponse.json({ agent }, { status: 201 })
   } catch (err) {

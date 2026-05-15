@@ -1,9 +1,11 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
-import { ddb, TABLES, PutCommand, UpdateCommand } from '@/lib/dynamodb'
+import { ddb, TABLES, PutCommand, UpdateCommand, GetCommand } from '@/lib/dynamodb'
 import { hermesClient } from '@/lib/hermesClient'
 import type { PermissionRequest } from '@/lib/hermesClient'
+import { syncAgentSoul, type SyncResult } from '@/lib/hermesProfileSync'
+import type { Agent } from '@/types/agent'
 
 export type { PermissionRequest }
 
@@ -88,13 +90,53 @@ export async function POST(req: NextRequest) {
           await saveMessageRecord(chatId, 'user', userText).catch(() => {/* non-fatal */})
         }
 
+        // Apply the selected agent's systemPrompt to Hermes's active SOUL
+        // before sending. Hermes hot-reloads SOUL.md on every message, so
+        // this is the minimum-viable bridge to actually drive chat behavior
+        // by the selected agent's customizations.
+        //
+        // Hard 3s timeout on the bridge: if Hermes is briefly unreachable
+        // we should NOT keep the user waiting 15s before the chat even
+        // starts. The chat itself has its own 2-minute timeout downstream.
+        //
+        // Limitations (acceptable for single-user MC, documented for future):
+        //   • Two concurrent chats with different agentIds would race on
+        //     /opt/data/SOUL.md. MC is currently single-user (basic-auth gate),
+        //     so this isn't observable today.
+        //   • Best-effort: errors here never block the chat — see the catch.
+        const selectedAgentId = agentId ?? 'general'
+        try {
+          const a = await ddb.send(new GetCommand({
+            TableName: TABLES.agents,
+            Key: { pk: 'AGENT', sk: `AGENT#${selectedAgentId}` },
+          }))
+          const prompt = (a.Item as Agent | undefined)?.systemPrompt ?? ''
+          // Write to the "default" profile because that's what /api/mc/chat
+          // loads at request time. See docs/hermes-profile-sync.md.
+          // Race against a 3s cap so a stuck Hermes can't block the chat.
+          const syncRes = await Promise.race<SyncResult>([
+            syncAgentSoul('default', prompt),
+            new Promise<SyncResult>(resolve => setTimeout(
+              () => resolve({ ok: false, status: 'network_error', detail: 'bridge timeout in chat path (>3s)' }),
+              3_000,
+            )),
+          ])
+          if (!syncRes.ok) {
+            console.warn(
+              `[chat] could not apply agent "${selectedAgentId}" SOUL to default: ${syncRes.status} ${syncRes.detail ?? ''}`
+            )
+          }
+        } catch (err) {
+          console.warn('[chat] agent SOUL apply skipped:', (err as Error).message ?? err)
+        }
+
         // Stream Hermes reply via hermesClient ────────────────────────────
         send({ type: 'status', message: 'Sending to Hermes...' })
 
         const reply = await hermesClient.chatSend({
           text:      userText,
           senderName,
-          agentId:   agentId ?? 'general',
+          agentId:   selectedAgentId,
           onPermissionRequest: (permReq) => {
             send({
               type:    'permission_request',
